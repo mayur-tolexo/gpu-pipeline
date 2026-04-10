@@ -1,0 +1,35 @@
+replicaCount: 1
+
+image:
+  repository: mq
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+liveness:
+  path: "/healthz"
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 1
+
+readiness:
+  path: "/healthz"
+  initialDelaySeconds: 2
+  periodSeconds: 5
+  timeoutSeconds: 1
+
+nodeSelector: {}
+
+tolerations: []
+

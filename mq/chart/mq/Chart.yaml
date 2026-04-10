@@ -1,0 +1,5 @@
+apiVersion: v2
+name: mq
+description: A simple in-memory MQ
+version: 0.1.0
+appVersion: "0.1.0"
