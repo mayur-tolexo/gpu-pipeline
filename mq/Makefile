@@ -50,3 +50,9 @@ kind-delete:
 ## Port fording the service
 port-forward:
 	kubectl port-forward svc/mq-service 8080:80
+
+## Create topic for telemetry data
+create-topic:
+	curl -X POST http://localhost:8080/topics \
+	-H "Content-Type: application/json" \
+	-d '{"name": "telemetry", "partitions": 10}'

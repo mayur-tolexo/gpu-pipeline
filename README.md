@@ -48,10 +48,10 @@ We follow a bottom-up approach, building the system layer by layer:
 - [x] Configurable batching
 
 ## Phase 4: Telemetry Streamer
-- [ ] CSV reader
-- [ ] Continuous streaming loop
-- [ ] Configurable rate
-- [ ] Horizontal scalability
+- [x] CSV reader
+- [x] Continuous streaming loop
+- [x] Configurable rate
+- [x] Horizontal scalability
 
 ## Phase 5: Telemetry Collector
 - [ ] Consumer group integration
