@@ -124,7 +124,6 @@ func (h *Handler) HandlePublish(w http.ResponseWriter, r *http.Request, topic st
 		return
 	}
 	partition, offset, err := h.Queue.Publish(topic, internalmq.Message{
-		ID:      req.ID,
 		Key:     req.Key,
 		Payload: []byte(req.Payload),
 	})
@@ -204,7 +203,6 @@ func (h *Handler) HandleConsume(w http.ResponseWriter, r *http.Request, topic st
 			for i, m := range msgs {
 				msgResp = append(msgResp, MessageResponse{
 					Offset:  startOffset + int64(i),
-					ID:      m.ID,
 					Key:     m.Key,
 					Payload: string(m.Payload),
 				})

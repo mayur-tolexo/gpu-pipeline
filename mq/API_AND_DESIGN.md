@@ -93,7 +93,6 @@ POST /topics/{topic}/publish
 Content-Type: application/json
 
 {
-  "id": "msg-123",
   "key": "user-456",
   "payload": "hello world"
 }
@@ -118,7 +117,6 @@ Response: `200 OK`
   "messages": [
     {
       "offset": 0,
-      "id": "msg-1",
       "key": "key-1",
       "payload": "data"
     }

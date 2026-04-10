@@ -107,8 +107,10 @@ Per-Consumer Offset Tracking:
 ### Prerequisites
 ```bash
 Go 1.25+
-Docker (optional, for containers)
-Helm 3+ (optional, for Kubernetes deployment)
+Docker
+Helm 3+
+kind
+kubectl
 ```
 
 ### Build
@@ -192,14 +194,14 @@ docker run -p 8080:8080 mq:latest -listen :8080 -partitions 3
 docker logs <container-id>
 ```
 
-### Kubernetes (Helm)
+### Kubernetes
 
 ```bash
-# Deploy to current cluster
-make helm
+# Create kind cluster
+make kind-create
 
-# Or manual deployment
-helm install mq chart/mq -f chart/mq/values.yaml
+# Build and deploy
+make kind-deploy
 
 # Verify deployment
 kubectl get pods -l app=mq
@@ -209,8 +211,12 @@ kubectl logs -l app=mq
 kubectl get svc mq
 
 # Port forward to test locally
-kubectl port-forward svc/mq 8080:80
+make port-forward
 curl http://localhost:8080/healthz
+
+# Delete cluster
+make kind-delete
+
 ```
 
 ### Helm Configuration

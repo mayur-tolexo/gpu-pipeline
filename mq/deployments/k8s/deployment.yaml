@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mq
+  template:
+    metadata:
+      labels:
+        app: mq
+    spec:
+      containers:
+        - name: mq
+          image: mq-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
