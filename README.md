@@ -26,27 +26,26 @@ The system is composed of independently deployable services:
 We follow a bottom-up approach, building the system layer by layer:
 
 ## Phase 1: Core Message Queue (Foundation)
-- [ ] Message abstraction (generic payload)  
-- [ ] Topic & partition model. 
-- [ ] Partitioning strategy (hash-based)
-- [ ] Thread-safe append/read
-- [ ] Consumer groups
-- [ ] Offset tracking
-- [ ] At-least-once delivery semantics
+- [x] Message abstraction (generic payload)  
+- [x] Topic & partition model. 
+- [x] Partitioning strategy (hash-based)
+- [x] Thread-safe append/read
+- [x] Consumer groups
+- [x] Offset tracking
+- [x] At-least-once delivery semantics
 
 ## Phase 2: MQ Service Layer
-- [ ] HTTP server for MQ
-- [ ] Publish API
-- [ ] Consume API
-- [ ] Ack API
-- [ ] Error handling & validation
-- [ ] Configurable partitions
+- [x] HTTP server for MQ
+- [x] Publish API
+- [x] Consume API
+- [x] Ack API
+- [x] Error handling & validation
+- [x] Configurable partitions
 
 ## Phase 3: MQ Client SDK
-- [ ] Producer client (for streamer)
-- [ ] Consumer client (for collector)
-- [ ] Retry logic
-- [ ] Configurable batching
+- [x] Producer client (for streamer)
+- [x] Consumer client (for collector)
+- [x] Configurable batching
 
 ## Phase 4: Telemetry Streamer
 - [ ] CSV reader
