@@ -4,6 +4,8 @@ metadata:
   name: create-topic
   namespace: gpu-pipeline
 spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
   template:
     spec:
       containers:
@@ -13,8 +15,10 @@ spec:
             - sh
             - -c
             - |
-              sleep 5
-              curl -X POST http://mq-service/topics \
+              sleep 10
+              echo "Creating telemetry topic with 3 partitions..."
+              curl -X POST http://mq-service:8080/topics \
               -H "Content-Type: application/json" \
               -d '{"name":"telemetry","partitions":3}'
+              echo "Topic created successfully"
       restartPolicy: Never

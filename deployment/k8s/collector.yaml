@@ -3,8 +3,15 @@ kind: Deployment
 metadata:
   name: collector
   namespace: gpu-pipeline
+  labels:
+    app: collector
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: collector
@@ -17,14 +24,41 @@ spec:
         - name: collector
           image: collector:latest
           imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+              name: http
+              protocol: TCP
           env:
             - name: MQ_URL
-              value: "http://mq-service"
+              value: "http://mq-service:8080"
             - name: TOPIC
               value: "telemetry"
             - name: GROUP
               value: "collector-group"
             - name: PARTITIONS
               value: "3"
+            - name: BATCH_SIZE
+              value: "10"
+            - name: POLL_INTERVAL_MS
+              value: "500"
             - name: DB_DSN
-              value: "postgres://user:pass@pgbouncer:6432/telemetry?sslmode=disable"
+              value: "postgres://user:pass@postgres:5432/telemetry?sslmode=disable"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 5
