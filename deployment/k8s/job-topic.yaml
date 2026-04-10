@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-topic
+  namespace: gpu-pipeline
+spec:
+  template:
+    spec:
+      containers:
+        - name: create-topic
+          image: curlimages/curl
+          command:
+            - sh
+            - -c
+            - |
+              sleep 5
+              curl -X POST http://mq-service/topics \
+              -H "Content-Type: application/json" \
+              -d '{"name":"telemetry","partitions":3}'
+      restartPolicy: Never

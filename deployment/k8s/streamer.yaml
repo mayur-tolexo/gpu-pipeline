@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamer
+  namespace: gpu-pipeline
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: streamer
+  template:
+    metadata:
+      labels:
+        app: streamer
+    spec:
+      containers:
+        - name: streamer
+          image: streamer:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CSV_FILE
+              value: "/data/telemetry.csv"
+            - name: MQ_URL
+              value: "http://mq-service"
+            - name: TOPIC
+              value: "telemetry"
+            - name: STREAM_INTERVAL_MS
+              value: "5000"
+          volumeMounts:
+            - name: telemetry-data
+              mountPath: /data
+      volumes:
+        - name: telemetry-data
+          configMap:
+            name: telemetry-csv

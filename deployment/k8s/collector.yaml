@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector
+  namespace: gpu-pipeline
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: collector
+  template:
+    metadata:
+      labels:
+        app: collector
+    spec:
+      containers:
+        - name: collector
+          image: collector:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MQ_URL
+              value: "http://mq-service"
+            - name: TOPIC
+              value: "telemetry"
+            - name: GROUP
+              value: "collector-group"
+            - name: PARTITIONS
+              value: "3"
+            - name: DB_DSN
+              value: "postgres://user:pass@pgbouncer:6432/telemetry?sslmode=disable"
