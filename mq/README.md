@@ -243,12 +243,14 @@ go tool cover -html=coverage.out
 go test ./internal ./api -race
 ```
 
-### Test Coverage
+### Swagger
+```bash
+# Generage swagger doc
+make swagger
 
-Current coverage:
-- `internal/partition.go`: 100% (5 test functions)
-- `internal/queue.go`: 80%+ (4 test functions)
-- `api/handler.go`: 80%+ (7 HTTP endpoint tests)
+# Open swagger UI
+http://localhost:8080/swagger/index.html
+```
 
 ## 🐳 Docker & Kubernetes
 

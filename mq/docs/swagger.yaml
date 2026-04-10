@@ -1,0 +1,205 @@
+definitions:
+  api.AckRequest:
+    properties:
+      group:
+        type: string
+      offset:
+        type: integer
+      partition:
+        type: integer
+    type: object
+  api.ConsumeResponse:
+    properties:
+      messages:
+        items:
+          $ref: '#/definitions/api.MessageResponse'
+        type: array
+      next_offset:
+        type: integer
+    type: object
+  api.CreateTopicRequest:
+    properties:
+      name:
+        type: string
+      partition_capacity:
+        type: integer
+      partitions:
+        type: integer
+    type: object
+  api.MessageResponse:
+    properties:
+      id:
+        type: string
+      key:
+        type: string
+      offset:
+        type: integer
+      payload:
+        type: string
+    type: object
+  api.PublishRequest:
+    properties:
+      id:
+        type: string
+      key:
+        type: string
+      payload:
+        type: string
+    type: object
+  api.PublishResponse:
+    properties:
+      offset:
+        type: integer
+      partition:
+        type: integer
+    type: object
+info:
+  contact: {}
+  license: {}
+paths:
+  /topics:
+    post:
+      consumes:
+      - application/json
+      description: Create a topic with given number of partitions
+      parameters:
+      - description: Create Topic
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.CreateTopicRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "409":
+          description: Conflict
+          schema:
+            type: string
+      summary: Create a new topic
+      tags:
+      - topics
+  /topics/{topic}/ack:
+    post:
+      consumes:
+      - application/json
+      description: Acknowledge processed messages
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Ack payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.AckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: Commit offset
+      tags:
+      - messages
+  /topics/{topic}/consume:
+    get:
+      description: Fetch messages from a partition
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Consumer group
+        in: query
+        name: group
+        required: true
+        type: string
+      - description: Partition ID
+        in: query
+        name: partition
+        required: true
+        type: integer
+      - description: Batch size
+        in: query
+        name: batch
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.ConsumeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: Consume messages
+      tags:
+      - messages
+  /topics/{topic}/publish:
+    post:
+      consumes:
+      - application/json
+      description: Publish a message to a topic
+      parameters:
+      - description: Topic name
+        in: path
+        name: topic
+        required: true
+        type: string
+      - description: Message payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.PublishRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/api.PublishResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: Publish a message
+      tags:
+      - messages
+swagger: "2.0"

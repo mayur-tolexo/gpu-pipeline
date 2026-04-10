@@ -145,33 +145,3 @@ func TestHandler_Health(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
-
-func TestHandler_Swagger(t *testing.T) {
-	q := internal.NewQueue(0)
-	h := NewHandler(q)
-
-	req := httptest.NewRequest(http.MethodGet, "/swagger", nil)
-	w := httptest.NewRecorder()
-
-	h.HandleSwagger(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-
-	// Verify response is valid JSON and contains OpenAPI info
-	var swagger map[string]interface{}
-	_ = json.NewDecoder(w.Body).Decode(&swagger)
-
-	if swagger["openapi"] != "3.0.0" {
-		t.Fatalf("expected openapi version 3.0.0")
-	}
-
-	if info, ok := swagger["info"].(map[string]interface{}); !ok || info["title"] != "Message Queue API" {
-		t.Fatalf("expected Message Queue API title")
-	}
-
-	if paths, ok := swagger["paths"].(map[string]interface{}); !ok || len(paths) == 0 {
-		t.Fatalf("expected paths in swagger specification")
-	}
-}
