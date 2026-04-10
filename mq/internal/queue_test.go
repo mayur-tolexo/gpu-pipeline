@@ -17,7 +17,7 @@ func TestQueue_CreatePublishConsumeAck(t *testing.T) {
 		t.Fatalf("expected ErrTopicExists, got %v", err)
 	}
 
-	msg := Message{ID: "m-1", Key: "k1", Payload: []byte("hello"), Timestamp: time.Now()}
+	msg := Message{Key: "k1", Payload: []byte("hello"), Timestamp: time.Now()}
 	p, off, err := q.Publish("t1", msg)
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
@@ -95,4 +95,3 @@ func TestQueue_AckInvalidArgs(t *testing.T) {
 		t.Fatalf("expected ErrPartitionRange")
 	}
 }
-

@@ -1,8 +1,9 @@
 BINARY= mq-server
 IMAGE= mq:latest
 CONFIG= config.json
+KIND_CLUSTER= mq-cluster
 
-.PHONY: all build docker test lint helm run clean config
+.PHONY: all build docker test lint helm run clean config kind-create kind-load kind-deploy kind-delete
 
 all: build
 
@@ -29,3 +30,23 @@ config:
 
 clean:
 	rm -f bin/$(BINARY) $(CONFIG) docs/
+
+## Create Kind cluster
+kind-create:
+	kind get clusters | grep -q $(KIND_CLUSTER) || kind create cluster --name $(KIND_CLUSTER)
+
+## Load image into Kind
+kind-load:
+	kind load docker-image $(IMAGE) --name $(KIND_CLUSTER)
+
+## Deploy to Kubernetes
+kind-deploy: kind-create docker-build kind-load
+	kubectl apply -f deployments/k8s/
+
+## Delete cluster
+kind-delete:
+	kind delete cluster --name $(KIND_CLUSTER)
+
+## Port fording the service
+port-forward:
+	kubectl port-forward svc/mq-service 8080:80

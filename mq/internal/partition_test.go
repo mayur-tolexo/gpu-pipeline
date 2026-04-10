@@ -2,7 +2,6 @@ package mq
 
 import (
 	"fmt"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -20,7 +19,7 @@ func TestPartition_BasicOperations(t *testing.T) {
 		t.Fatalf("expected tail 0")
 	}
 
-	m1 := Message{ID: "m1", Key: "k", Payload: []byte("a"), Timestamp: time.Now()}
+	m1 := Message{Key: "k", Payload: []byte("a"), Timestamp: time.Now()}
 	off1, err := p.Append(m1)
 	if err != nil {
 		t.Fatalf("unexpected append error: %v", err)
@@ -49,7 +48,7 @@ func TestPartition_BasicOperations(t *testing.T) {
 func TestPartition_ReadFrom(t *testing.T) {
 	p := NewPartition("p1", 0)
 	for i := 0; i < 5; i++ {
-		if _, err := p.Append(Message{ID: strconv.Itoa(i), Payload: []byte{byte(i)}}); err != nil {
+		if _, err := p.Append(Message{Payload: []byte{byte(i)}}); err != nil {
 			t.Fatalf("append failed: %v", err)
 		}
 	}
@@ -90,7 +89,7 @@ func TestPartition_ReadFrom(t *testing.T) {
 func TestPartition_CommitAndOffset(t *testing.T) {
 	p := NewPartition("p2", 0)
 	for i := 0; i < 3; i++ {
-		if _, err := p.Append(Message{ID: fmt.Sprintf("%c", rune('a')+rune(i))}); err != nil {
+		if _, err := p.Append(Message{Payload: []byte(fmt.Sprintf("%c", rune('a')+rune(i)))}); err != nil {
 			t.Fatalf("append failed: %v", err)
 		}
 	}
@@ -119,7 +118,7 @@ func TestPartition_Concurrency(t *testing.T) {
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer wg.Done()
-			if _, err := p.Append(Message{ID: fmt.Sprintf("%c", rune('A')+rune(i%26))}); err != nil {
+			if _, err := p.Append(Message{Payload: []byte(fmt.Sprintf("%c", rune('A')+rune(i%26)))}); err != nil {
 				t.Fatalf("append failed: %v", err)
 			}
 		}(i)

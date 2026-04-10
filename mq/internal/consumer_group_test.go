@@ -15,7 +15,6 @@ func TestConsumerGroup_BasicFlow(t *testing.T) {
 	cg := NewConsumerGroup("group-1", topic)
 
 	msg := Message{
-		ID:        "m1",
 		Key:       "key",
 		Payload:   []byte("data"),
 		Timestamp: time.Now(),
@@ -43,7 +42,6 @@ func TestConsumerGroup_BatchLimit(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		topic.GetPartition(0).Append(Message{
-			ID:      string(rune('a' + i)),
 			Key:     "k",
 			Payload: []byte("d"),
 		})
@@ -102,7 +100,7 @@ func TestConsumerGroup_CommitAndOffset(t *testing.T) {
 	topic := setupTopic()
 	cg := NewConsumerGroup("group-1", topic)
 
-	topic.GetPartition(0).Append(Message{ID: "m1"})
+	topic.GetPartition(0).Append(Message{})
 
 	_, nextOff, _ := cg.Consume(0, 10)
 
@@ -121,8 +119,8 @@ func TestConsumerGroup_MultiplePartitions(t *testing.T) {
 	topic := setupTopic()
 	cg := NewConsumerGroup("group-1", topic)
 
-	topic.GetPartition(0).Append(Message{ID: "p0"})
-	topic.GetPartition(1).Append(Message{ID: "p1"})
+	topic.GetPartition(0).Append(Message{})
+	topic.GetPartition(1).Append(Message{})
 
 	_, off0, _ := cg.Consume(0, 10)
 	_, off1, _ := cg.Consume(1, 10)
@@ -143,7 +141,7 @@ func TestConsumerGroup_BeyondAvailable(t *testing.T) {
 	topic := setupTopic()
 	cg := NewConsumerGroup("group-1", topic)
 
-	topic.GetPartition(0).Append(Message{ID: "m1"})
+	topic.GetPartition(0).Append(Message{})
 
 	// First consume
 	msgs, nextOff, _ := cg.Consume(0, 10)
