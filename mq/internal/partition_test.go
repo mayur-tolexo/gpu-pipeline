@@ -9,7 +9,7 @@ import (
 )
 
 func TestPartition_BasicOperations(t *testing.T) {
-	p := NewPartition("p0")
+	p := NewPartition("p0", 0)
 	if p.ID() != "p0" {
 		t.Fatalf("unexpected id: %s", p.ID())
 	}
@@ -21,7 +21,10 @@ func TestPartition_BasicOperations(t *testing.T) {
 	}
 
 	m1 := Message{ID: "m1", Key: "k", Payload: []byte("a"), Timestamp: time.Now()}
-	off1 := p.Append(m1)
+	off1, err := p.Append(m1)
+	if err != nil {
+		t.Fatalf("unexpected append error: %v", err)
+	}
 	if off1 != 0 {
 		t.Fatalf("expected offset 0, got %d", off1)
 	}
@@ -44,9 +47,11 @@ func TestPartition_BasicOperations(t *testing.T) {
 }
 
 func TestPartition_ReadFrom(t *testing.T) {
-	p := NewPartition("p1")
+	p := NewPartition("p1", 0)
 	for i := 0; i < 5; i++ {
-		p.Append(Message{ID: strconv.Itoa(i), Payload: []byte{byte(i)}})
+		if _, err := p.Append(Message{ID: strconv.Itoa(i), Payload: []byte{byte(i)}}); err != nil {
+			t.Fatalf("append failed: %v", err)
+		}
 	}
 
 	// read subset
@@ -83,9 +88,11 @@ func TestPartition_ReadFrom(t *testing.T) {
 }
 
 func TestPartition_CommitAndOffset(t *testing.T) {
-	p := NewPartition("p2")
+	p := NewPartition("p2", 0)
 	for i := 0; i < 3; i++ {
-		p.Append(Message{ID: fmt.Sprintf("%c", rune('a')+rune(i))})
+		if _, err := p.Append(Message{ID: fmt.Sprintf("%c", rune('a')+rune(i))}); err != nil {
+			t.Fatalf("append failed: %v", err)
+		}
 	}
 	// default offset
 	if p.Offset("cg") != 0 {
@@ -105,14 +112,16 @@ func TestPartition_CommitAndOffset(t *testing.T) {
 }
 
 func TestPartition_Concurrency(t *testing.T) {
-	p := NewPartition("p3")
+	p := NewPartition("p3", 0)
 	wg := sync.WaitGroup{}
 	n := 200
 	wg.Add(n)
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer wg.Done()
-			p.Append(Message{ID: fmt.Sprintf("%c", rune('A')+rune(i%26))})
+			if _, err := p.Append(Message{ID: fmt.Sprintf("%c", rune('A')+rune(i%26))}); err != nil {
+				t.Fatalf("append failed: %v", err)
+			}
 		}(i)
 	}
 	wg.Wait()
@@ -140,7 +149,7 @@ func TestPartition_Concurrency(t *testing.T) {
 }
 
 func TestPartition_Errors(t *testing.T) {
-	p := NewPartition("p4")
+	p := NewPartition("p4", 0)
 	// negative get
 	if _, err := p.Get(-1); err == nil {
 		t.Fatalf("expected error for negative offset")

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	mq "gpu-pipeline/mq"
+	apimux "gpu-pipeline/mq/api"
 	internalmq "gpu-pipeline/mq/internal"
 )
 
@@ -63,24 +62,29 @@ func main() {
 		}
 	}
 
-	// simple topic
-	topic := mq.NewTopic("default", *parts)
-	_ = mq.NewProducer(topic)
-	// create a simple HTTP server exposing minimal endpoints
-	h := http.NewServeMux()
-	h.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200); w.Write([]byte("ok")) })
-	h.HandleFunc("/produce", func(w http.ResponseWriter, r *http.Request) {
-		key := r.URL.Query().Get("key")
-		msg := internalmq.Message{ID: fmt.Sprintf("m-%d", time.Now().UnixNano()), Key: key, Payload: []byte(r.URL.Query().Get("payload")), Timestamp: time.Now()}
-		idx, off := topic.Produce(msg)
-		w.WriteHeader(200)
-		w.Write([]byte(fmt.Sprintf("%d:%d", idx, off)))
-	})
+	// initialize queue with default partition capacity
+	q := internalmq.NewQueue(*parts)
 
-	srv := &http.Server{Addr: *addr, Handler: h}
+	// create a sample default topic for demo
+	if err := q.CreateTopic("default", *parts, 0); err != nil {
+		log.Printf("warning: create default topic: %v", err)
+	}
+
+	// setup API handler and routes
+	apiHandler := apimux.NewHandler(q)
+	mux := http.NewServeMux()
+	apiHandler.RegisterRoutes(mux)
+
+	srv := &http.Server{
+		Addr:         *addr,
+		Handler:      mux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
 
 	go func() {
-		log.Printf("starting server on %s (partitions=%d)", *addr, *parts)
+		log.Printf("starting server on %s (default partitions=%d)", *addr, *parts)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
