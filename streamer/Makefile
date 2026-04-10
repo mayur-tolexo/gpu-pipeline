@@ -17,7 +17,7 @@ run:
 	CSV_FILE=./data/telemetry.csv \
 	MQ_URL=http://localhost:8080 \
 	TOPIC=telemetry \
-	STREAM_INTERVAL_MS=500 \
+	STREAM_INTERVAL_MS=5000 \
 	./bin/$(APP_NAME)
 
 ## Run tests
@@ -34,7 +34,7 @@ docker-run:
 	-e CSV_FILE=/data/telemetry.csv \
 	-e MQ_URL=http://host.docker.internal:8080 \
 	-e TOPIC=telemetry \
-	-e STREAM_INTERVAL_MS=500 \
+	-e STREAM_INTERVAL_MS=5000 \
 	-v $(PWD)/data:/data \
 	$(IMAGE_NAME)
 

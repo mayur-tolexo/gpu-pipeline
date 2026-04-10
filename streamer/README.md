@@ -16,7 +16,7 @@ horizontally in Kubernetes.
   CSV_FILE             Path to telemetry CSV file    /data/telemetry.csv
   MQ_URL               MQ service URL                http://mq-service
   TOPIC                MQ topic name                 telemetry
-  STREAM_INTERVAL_MS   Delay between messages (ms)   500
+  STREAM_INTERVAL_MS   Delay between messages (ms)   5000
 ```
 
 ## Local Development

@@ -52,6 +52,7 @@ func (s *Streamer) Start() {
 				continue
 			}
 
+			log.Printf("published record for gpu_id: %s", key)
 			time.Sleep(s.config.Interval)
 		}
 	}
