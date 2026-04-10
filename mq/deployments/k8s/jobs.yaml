@@ -1,0 +1,18 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-topic
+spec:
+  template:
+    spec:
+      containers:
+        - name: curl
+          image: curlimages/curl
+          command:
+            - sh
+            - -c
+            - |
+              curl -X POST http://mq-service/topics \
+              -H "Content-Type: application/json" \
+              -d '{"name":"telemetry","partitions":10}'
+      restartPolicy: Never
