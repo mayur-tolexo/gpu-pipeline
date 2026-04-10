@@ -13,7 +13,7 @@ docker: build
 	docker build -t $(IMAGE) .
 
 test:
-	go test ./... 
+	go test ./internal ./api -v
 
 helm:
 	helm upgrade --install mq chart/mq -f chart/mq/values.yaml

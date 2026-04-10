@@ -12,11 +12,18 @@ var ErrOffsetOutOfRange = errors.New("offset out of range")
 // ErrCommitTooLarge is returned when committing an offset beyond the tail.
 var ErrCommitTooLarge = errors.New("commit offset beyond tail")
 
+// ErrPartitionFull is returned when a partition reached its capacity.
+var ErrPartitionFull = errors.New("partition full")
+
 // Partition is an append-only log of messages with per-consumer offsets.
 // It's intentionally simple so it can be extended later (persistence, WAL, etc.).
+// Partition-level locking provides concurrency isolation: each partition can
+// be appended/read independently without a global lock, enabling parallelism
+// across partitions.
 type Partition struct {
-	mu       sync.RWMutex
-	messages []Message
+	mu         sync.RWMutex
+	messages   []Message
+	maxMessage int // <=0 means unlimited
 	// committed offsets per consumer group - use sync.Map to avoid locking the
 	// whole partition when different consumers commit concurrently.
 	offsets sync.Map // map[string]*atomic.Int64
@@ -40,11 +47,12 @@ type Partition struct {
 // The current in-memory implementation keeps the API surface stable so these
 // changes can be introduced with minimal impact to callers.
 
-// NewPartition creates a new partition with the given id.
-func NewPartition(id string) *Partition {
+// NewPartition creates a new partition with the given id and optional capacity.
+func NewPartition(id string, capacity int) *Partition {
 	return &Partition{
-		messages: make([]Message, 0),
-		id:       id,
+		messages:   make([]Message, 0),
+		maxMessage: capacity,
+		id:         id,
 	}
 }
 
@@ -54,12 +62,16 @@ func (p *Partition) ID() string {
 }
 
 // Append adds a message to the partition and returns the offset of the appended message.
-func (p *Partition) Append(msg Message) int64 {
+// Returns ErrPartitionFull if a capacity was configured and reached.
+func (p *Partition) Append(msg Message) (int64, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.maxMessage > 0 && len(p.messages) >= p.maxMessage {
+		return -1, ErrPartitionFull
+	}
 	offset := int64(len(p.messages))
 	p.messages = append(p.messages, msg)
-	return offset
+	return offset, nil
 }
 
 // TailOffset returns the next offset to be assigned (i.e., length of the log).
@@ -88,12 +100,13 @@ func (p *Partition) Get(offset int64) (Message, error) {
 
 // ReadFrom reads up to max messages starting from offset. If max <= 0, all messages are returned.
 // Returns ErrOffsetOutOfRange when offset is greater than the tail offset.
+// This returns an empty slice (not nil) when offset == tail to make callers simpler.
 func (p *Partition) ReadFrom(offset int64, max int) ([]Message, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	tail := int64(len(p.messages))
 	if offset < 0 || offset > tail {
-		return nil, ErrOffsetOutOfRange
+		return []Message{}, ErrOffsetOutOfRange
 	}
 	if offset == tail {
 		return []Message{}, nil
