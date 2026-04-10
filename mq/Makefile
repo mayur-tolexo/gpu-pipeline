@@ -15,6 +15,9 @@ docker: build
 test:
 	go test ./internal ./api -v
 
+swagger:
+	swag init -g ./cmd/mq-server/main.go
+
 helm:
 	helm upgrade --install mq chart/mq -f chart/mq/values.yaml
 
@@ -25,4 +28,4 @@ config:
 	@echo '{"listen":":8080","partitions":3}' > $(CONFIG) && echo "wrote $(CONFIG)"
 
 clean:
-	rm -f bin/$(BINARY) $(CONFIG)
+	rm -f bin/$(BINARY) $(CONFIG) docs/

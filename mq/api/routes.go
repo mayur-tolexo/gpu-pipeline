@@ -3,6 +3,10 @@ package api
 import (
 	"net/http"
 	"strings"
+
+	_ "gpu-pipeline/mq/docs"
+
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 // RegisterRoutes registers all MQ API routes on the given mux.
@@ -10,7 +14,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/topics", h.handleTopicsRoot)
 	mux.HandleFunc("/topics/", h.handleTopicsSubroutes)
 	mux.HandleFunc("/healthz", h.handleHealth)
-	mux.HandleFunc("/swagger", h.HandleSwagger)
+	mux.Handle("/swagger/", httpSwagger.WrapHandler)
 }
 
 // handleTopicsRoot routes POST /topics (create topic)
