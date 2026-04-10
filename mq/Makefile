@@ -14,7 +14,7 @@ docker: build
 	docker build -t $(IMAGE) .
 
 test:
-	go test ./internal ./api -v
+	go test ./client ./internal ./api -v
 
 swagger:
 	swag init -g ./cmd/mq-server/main.go
