@@ -17,12 +17,18 @@ run:
 	CSV_FILE=./data/telemetry.csv \
 	MQ_URL=http://localhost:8080 \
 	TOPIC=telemetry \
-	STREAM_INTERVAL_MS=500 \
+	STREAM_INTERVAL_MS=5000 \
 	./bin/$(APP_NAME)
 
 ## Run tests
 test:
 	go test ./... -cover
+
+coverage:
+	@echo "Running streamer tests with coverage..."
+	@go test ./... -coverprofile=coverage.out || true
+	@go tool cover -func=coverage.out | sed -n '1,200p'
+	@TOTAL=$$(go tool cover -func=coverage.out | awk '/total:/ {print $$3}'); echo "Total coverage: $$TOTAL"
 
 ## Build Docker image
 docker-build:
@@ -34,7 +40,7 @@ docker-run:
 	-e CSV_FILE=/data/telemetry.csv \
 	-e MQ_URL=http://host.docker.internal:8080 \
 	-e TOPIC=telemetry \
-	-e STREAM_INTERVAL_MS=500 \
+	-e STREAM_INTERVAL_MS=5000 \
 	-v $(PWD)/data:/data \
 	$(IMAGE_NAME)
 

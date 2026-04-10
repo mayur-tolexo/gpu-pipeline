@@ -16,6 +16,12 @@ docker: build
 test:
 	go test ./client ./internal ./api -v
 
+coverage:
+	@echo "Running md tests with coverage..."
+	@go test ./client ./internal ./api -coverprofile=coverage.out || true
+	@go tool cover -func=coverage.out | sed -n '1,200p'
+	@TOTAL=$$(go tool cover -func=coverage.out | awk '/total:/ {print $$3}'); echo "Total coverage: $$TOTAL"
+
 swagger:
 	swag init -g ./cmd/mq-server/main.go
 
