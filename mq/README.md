@@ -146,84 +146,18 @@ curl http://localhost:8080/healthz
 
 ## 📡 HTTP API
 
-### Endpoints
+### Swagger
+```bash
+# Generage swagger doc
+make swagger
 
-#### 1. Create Topic
-```
-POST /topics
-Content-Type: application/json
+# Build and run
+make build run
 
-{
-  "name": "events",
-  "partitions": 3
-}
-
-Response (201 Created):
-{
-  "name": "events",
-  "partitions": 3
-}
+# Open swagger UI
+http://localhost:8080/swagger/index.html
 ```
 
-#### 2. Publish Message
-```
-POST /topics/{topic}/publish
-Content-Type: application/json
-
-{
-  "id": "msg1",
-  "key": "user-123",
-  "payload": "base64-encoded-data"
-}
-
-Response (200 OK):
-{
-  "partition": 0,
-  "offset": 42
-}
-```
-
-#### 3. Consume Messages
-```
-GET /topics/{topic}/consume?group=consumer-group&partition=0&batch=10
-
-Response (200 OK):
-{
-  "messages": [
-    {
-      "id": "msg1",
-      "key": "user-123",
-      "payload": "base64-encoded-data",
-      "timestamp": "2026-04-10T14:38:29Z",
-      "offset": 42
-    }
-  ],
-  "nextOffset": 43
-}
-```
-
-#### 4. Acknowledge Messages
-```
-POST /topics/{topic}/ack
-Content-Type: application/json
-
-{
-  "group": "consumer-group",
-  "partition": 0,
-  "offset": 42
-}
-
-Response (200 OK):
-{ "success": true }
-```
-
-#### 5. Health Check
-```
-GET /healthz
-
-Response (200 OK):
-ok
-```
 
 ## 📊 Testing & Coverage
 
@@ -241,15 +175,6 @@ go tool cover -html=coverage.out
 
 # Check for race conditions
 go test ./internal ./api -race
-```
-
-### Swagger
-```bash
-# Generage swagger doc
-make swagger
-
-# Open swagger UI
-http://localhost:8080/swagger/index.html
 ```
 
 ## 🐳 Docker & Kubernetes
