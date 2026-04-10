@@ -1,0 +1,4 @@
+{
+  "listen": ":8080",
+  "partitions": 3
+}
