@@ -16,7 +16,4 @@ FROM gcr.io/distroless/base-debian12
 WORKDIR /
 COPY --from=builder /out/streamer /streamer
 
-# CSV mounted via volume
-VOLUME ["/data"]
-
 ENTRYPOINT ["/streamer"]

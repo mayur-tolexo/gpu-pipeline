@@ -16,33 +16,125 @@ spec:
       labels:
         app: streamer
     spec:
+      {{- if eq .Values.streamer.storage.type "hostPath" }}
+      # Node affinity to pin to specific node (hostPath mode)
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - {{ .Values.streamer.storage.hostPath.nodeName }}
+      {{- end }}
+      
+      initContainers:
+        {{- if or (eq .Values.streamer.storage.type "hostPath") (eq .Values.streamer.storage.type "rwx") }}
+        # Init container to wait for CSV file to exist
+        - name: wait-for-csv
+          image: {{ .Values.streamer.initContainer.image }}
+          command: ['sh', '-c']
+          args:
+            - |
+              CSV_PATH="{{ .Values.streamer.csv.path }}/{{ .Values.streamer.csv.fileName }}"
+              TIMEOUT={{ .Values.streamer.csv.waitTimeout }}
+              ELAPSED=0
+              
+              echo "Waiting for CSV file: $CSV_PATH (timeout: ${TIMEOUT}s)"
+              while [ ! -f "$CSV_PATH" ] && [ $ELAPSED -lt $TIMEOUT ]; do
+                echo "CSV file not found. Retrying... ($ELAPSED/${TIMEOUT}s)"
+                sleep 2
+                ELAPSED=$((ELAPSED + 2))
+              done
+              
+              if [ -f "$CSV_PATH" ]; then
+                echo "✓ CSV file found: $CSV_PATH"
+                ls -lah "$CSV_PATH"
+                echo "First 3 lines:"
+                head -3 "$CSV_PATH"
+                exit 0
+              else
+                echo "✗ CSV file not found after ${TIMEOUT}s: $CSV_PATH"
+                exit 1
+              fi
+          volumeMounts:
+            - name: telemetry-data
+              mountPath: {{ .Values.streamer.csv.path }}
+        {{- else if eq .Values.streamer.storage.type "remote" }}
+        # Init container to download CSV from remote URL
+        - name: fetch-csv
+          image: {{ .Values.streamer.initContainer.image }}
+          command: ['sh', '-c']
+          args:
+            - |
+              CSV_PATH="{{ .Values.streamer.csv.path }}/{{ .Values.streamer.csv.fileName }}"
+              URL="{{ .Values.streamer.storage.remote.url }}"
+              RETRIES={{ .Values.streamer.storage.remote.retries }}
+              DELAY={{ .Values.streamer.storage.remote.retryDelay }}
+              
+              mkdir -p {{ .Values.streamer.csv.path }}
+              
+              for i in $(seq 1 $RETRIES); do
+                echo "Fetching CSV from $URL (attempt $i/$RETRIES)"
+                if wget -O "$CSV_PATH" "$URL" 2>/dev/null; then
+                  echo "✓ Successfully downloaded CSV"
+                  ls -lah "$CSV_PATH"
+                  echo "First 3 lines:"
+                  head -3 "$CSV_PATH"
+                  exit 0
+                fi
+                if [ $i -lt $RETRIES ]; then
+                  echo "Retry in ${DELAY}s..."
+                  sleep $DELAY
+                fi
+              done
+              
+              echo "✗ Failed to download CSV after $RETRIES attempts"
+              exit 1
+          volumeMounts:
+            - name: telemetry-data
+              mountPath: {{ .Values.streamer.csv.path }}
+        {{- end }}
+      
       containers:
         - name: streamer
           image: {{ .Values.streamer.image }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           env:
             - name: CSV_FILE
-              value: "{{ .Values.streamer.csv_file }}"
+              value: "{{ .Values.streamer.csv.path }}/{{ .Values.streamer.csv.fileName }}"
             - name: MQ_URL
-              value: "http://mq-service:{{ .Values.mq.port }}"
+              value: "{{ .Values.streamer.mq_url }}"
             - name: TOPIC
               value: "{{ .Values.streamer.topic }}"
             - name: STREAM_INTERVAL_MS
               value: "{{ .Values.streamer.stream_interval_ms }}"
           resources:
             {{- toYaml .Values.streamer.resources | nindent 12 }}
-          livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - ps aux | grep -q streamer | grep -v grep
-            initialDelaySeconds: 10
-            periodSeconds: 10
           volumeMounts:
             - name: telemetry-data
-              mountPath: /data
+              mountPath: {{ .Values.streamer.csv.path }}
+      
       volumes:
+        {{- if eq .Values.streamer.storage.type "hostPath" }}
+        # hostPath volume for local development
         - name: telemetry-data
-          configMap:
-            name: telemetry-csv
+          hostPath:
+            path: {{ .Values.streamer.storage.hostPath.path }}
+            type: DirectoryOrCreate
+        {{- else if eq .Values.streamer.storage.type "rwx" }}
+        # PVC with ReadWriteMany for multi-node clusters
+        - name: telemetry-data
+          persistentVolumeClaim:
+            claimName: streamer-pvc
+        {{- else if eq .Values.streamer.storage.type "remote" }}
+        # emptyDir for remote fetch mode
+        - name: telemetry-data
+          emptyDir: {}
+        {{- else }}
+        # Embedded mode - data in Docker image
+        - name: telemetry-data
+          emptyDir: {}
+        {{- end }}
+

@@ -46,3 +46,13 @@ jobs:
           context: ./collector
           push: false
           tags: collector:latest
+
+      - name: Build API Gateway Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: ./api-gateway/Dockerfile
+          push: false
+          tags: gpu-pipeline/api-gateway:latest
+          build-args: |
+            ROOT=.

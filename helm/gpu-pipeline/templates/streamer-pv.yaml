@@ -1,0 +1,42 @@
+{{- if eq .Values.streamer.storage.type "hostPath" }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: streamer-pv
+  labels:
+    app: streamer
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: {{ .Values.streamer.storage.hostPath.path }}
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - {{ .Values.streamer.storage.hostPath.nodeName }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: streamer-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: streamer
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: streamer-pv
+{{- end }}

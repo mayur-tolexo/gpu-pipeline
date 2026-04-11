@@ -20,8 +20,8 @@
 5. [Build & Test](#build--test)
 6. [Access Swagger UI](#-access-swagger-ui-customer-facing-api)
 7. [Deployment](#deployment)
-8. [Commands Reference](#commands-reference)
-9. [Project Status](#project-status)
+8. [Troubleshooting](#troubleshooting)
+9. [Project Status](#development-roadmap)
 10. [Tech Stack](#tech-stack)
 
 ---
@@ -130,7 +130,8 @@ The system is composed of independently deployable services:
   - CSV streaming with configurable intervals
   - Graceful shutdown with context cancellation
   - Publisher interface for dependency injection
-  - Configurable batch processing
+  - 4 flexible storage modes (embedded, hostPath, RWX, remote)
+- **📚 Detailed Documentation**: See [streamer/README.md](./streamer/README.md)
 
 ### 📨 Custom Message Queue (MQ)
 - **Binary**: `./mq/bin/mq-server`
@@ -273,7 +274,7 @@ make api-gateway-port-forward
 # Terminal 2: Open Swagger UI in browser
 make swagger-ui
 
-# Or manually visit: http://localhost:8000/swagger/
+# Or manually visit: http://localhost:8081/swagger/
 ```
 
 ### API Endpoints
@@ -305,6 +306,43 @@ curl -X GET http://localhost:8000/api/v1/health
 
 ## Deployment
 
+### ✅ Quick Start
+
+The telemetry data is now **embedded in the Docker image**, so deployment is straightforward:
+
+```bash
+# Full deployment (recommended)
+make deploy
+
+# Or step-by-step
+make kind-create            # Create local cluster
+make docker-build-all       # Build all images
+make docker-load-all        # Load into Kind
+make deploy-all             # Deploy all services
+make verify                 # Verify running
+```
+
+**Testing with Different CSV Files**:
+To test with a different telemetry dataset:
+
+```bash
+# 1. Replace the CSV file
+cp /path/to/new/telemetry.csv streamer/data/telemetry.csv
+
+# 2. Rebuild the Docker image
+make docker-build-all
+
+# 3. Load into Kind
+make docker-load-all
+
+# 4. Restart the streamer
+kubectl rollout restart deployment/streamer -n gpu-pipeline
+```
+
+For more details, see [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md).
+
+**Note on Storage Modes**: The Streamer service supports 4 flexible storage modes (embedded, hostPath, RWX, remote) for telemetry data. See [streamer/README.md](./streamer/README.md#storage-modes) for detailed configuration and examples.
+
 ### Available Commands
 
 ```bash
@@ -323,13 +361,19 @@ make watch                  # Watch pods in real-time
 make logs                   # Show collector logs
 make logs-all               # Show all service logs
 
+# Streamer Storage (CSV File Management)
+make streamer-copy-csv      # Copy CSV to ./data for KIND (hostPath mode)
+make streamer-verify-csv    # Verify CSV exists in KIND node
+make streamer-logs          # Stream logs from streamer pods
+make streamer-describe      # Show streamer deployment details
+
 # API Gateway
 make api-gateway-port-forward  # Port-forward API Gateway (8000:8000)
 make swagger-ui                 # Open Swagger UI in browser
 
-# Helm
-make helm-install           # Install via Helm
-make helm-uninstall         # Uninstall Helm
+# Helm (Unified deployment for all services)
+make helm-install           # Install all services (MQ, Streamer, Collector, etc.)
+make helm-uninstall         # Uninstall all services
 
 # Cleanup
 make cleanup                # Delete namespace (keep cluster)
@@ -713,6 +757,18 @@ make deploy
 | ORM | GORM |
 | Testing | Go testing + custom coverage |
 | API Docs | OpenAPI (Swagger) |
+
+---
+
+## Detailed Documentation
+
+- **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** - Complete deployment instructions, troubleshooting, and operations guide
+  - Step-by-step deployment process
+  - ConfigMap setup and telemetry data management
+  - Service access and API examples
+  - Helm deployment instructions
+  - Troubleshooting common issues
+  - Monitoring and updating services
 
 ---
 

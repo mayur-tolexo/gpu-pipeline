@@ -1,0 +1,55 @@
+# KIND Cluster Configuration for GPU Pipeline Testing
+# This config creates a single-node KIND cluster with mounted volumes for local development
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+
+name: gpu-pipeline
+
+# Single node cluster for testing
+nodes:
+- role: control-plane
+  # Mount local ./data directory into the node at /data
+  # This allows streamer pods to access CSV files from your local machine
+  extraMounts:
+  - hostPath: ./data
+    containerPath: /data
+    readOnly: false
+  
+  # Port mappings for access from host
+  extraPortMappings:
+  # MQ Service
+  - containerPort: 8080
+    hostPort: 8080
+    listenAddress: 127.0.0.1
+    protocol: TCP
+  # Collector
+  - containerPort: 8081
+    hostPort: 8081
+    listenAddress: 127.0.0.1
+    protocol: TCP
+  # PostgreSQL
+  - containerPort: 5432
+    hostPort: 5432
+    listenAddress: 127.0.0.1
+    protocol: TCP
+  # API Gateway
+  - containerPort: 8000
+    hostPort: 8000
+    listenAddress: 127.0.0.1
+    protocol: TCP
+
+# Use a recent Kubernetes version
+image: kindest/node:v1.28.0
+
+# Networking
+networking:
+  apiServerAddress: 127.0.0.1
+  apiServerPort: 6443
+  podSubnet: 10.244.0.0/16
+  serviceSubnet: 10.96.0.0/12
+  disableDefaultCNI: false
+
+# Feature gates
+featureGates:
+  LocalStorageCapacityIsolation: true

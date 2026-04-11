@@ -31,13 +31,13 @@ spec:
             {{- toYaml .Values.mq.resources | nindent 12 }}
           livenessProbe:
             httpGet:
-              path: /health
+              path: /healthz
               port: {{ .Values.mq.port }}
             initialDelaySeconds: 10
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /health
+              path: /healthz
               port: {{ .Values.mq.port }}
             initialDelaySeconds: 5
             periodSeconds: 5

@@ -15,6 +15,47 @@ spec:
       labels:
         app: streamer
     spec:
+      # Pin to control-plane node for hostPath access in KIND
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+      
+      # Init container to wait for CSV file
+      initContainers:
+        - name: wait-for-csv
+          image: busybox:latest
+          command: ['sh', '-c']
+          args:
+            - |
+              CSV_PATH="/data/telemetry.csv"
+              TIMEOUT=120
+              ELAPSED=0
+              
+              echo "Waiting for CSV file: $CSV_PATH (timeout: ${TIMEOUT}s)"
+              while [ ! -f "$CSV_PATH" ] && [ $ELAPSED -lt $TIMEOUT ]; do
+                echo "CSV file not found. Retrying... ($ELAPSED/${TIMEOUT}s)"
+                sleep 2
+                ELAPSED=$((ELAPSED + 2))
+              done
+              
+              if [ -f "$CSV_PATH" ]; then
+                echo "✓ CSV file found: $CSV_PATH"
+                ls -lah "$CSV_PATH"
+                echo "First 3 lines:"
+                head -3 "$CSV_PATH"
+                exit 0
+              else
+                echo "✗ CSV file not found after ${TIMEOUT}s: $CSV_PATH"
+                exit 1
+              fi
+          volumeMounts:
+            - name: telemetry-data
+              mountPath: /data
+      
       containers:
         - name: streamer
           image: streamer:latest
@@ -46,7 +87,11 @@ spec:
           volumeMounts:
             - name: telemetry-data
               mountPath: /data
+      
       volumes:
+        # hostPath volume for local KIND development
+        # The path /data must exist on the node or be created
         - name: telemetry-data
-          configMap:
-            name: telemetry-csv
+          hostPath:
+            path: /data
+            type: DirectoryOrCreate

@@ -2,9 +2,31 @@
 BINARY= streamer
 IMAGE= streamer:latest
 CONFIG= config.json
-KIND_CLUSTER= mq-cluster
+KIND_CLUSTER= gpu-pipeline
 
-.PHONY: all build docker test coverage lint helm run clean config kind-create kind-load kind-deploy kind-delete
+.PHONY: all build docker test coverage lint helm run clean config kind-create kind-load kind-deploy kind-delete help
+
+help:
+	@echo "Streamer Service - Available Commands"
+	@echo ""
+	@echo "Build & Test:"
+	@echo "  make build              - Build streamer binary"
+	@echo "  make test               - Run tests"
+	@echo "  make coverage           - Show test coverage"
+	@echo "  make lint               - Format and lint code"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker             - Build Docker image"
+	@echo ""
+	@echo "Local Development:"
+	@echo "  make run                - Run streamer locally (requires MQ running)"
+	@echo ""
+	@echo "Kubernetes:"
+	@echo "  make deploy             - Deploy to Kubernetes (expects deployment files)"
+	@echo "  make logs               - View streamer pod logs"
+	@echo ""
+	@echo "Cleanup:"
+	@echo "  make clean              - Clean build artifacts"
 
 all: build
 
@@ -12,7 +34,7 @@ build:
 	go build -o bin/$(BINARY) ./cmd
 
 docker:
-	docker build -t $(IMAGE) --build-arg ROOT=. -f ./Dockerfile ..
+	docker build -t $(IMAGE) --build-arg ROOT=.. -f ./Dockerfile ..
 
 test:
 	go test ./internal -v
@@ -27,10 +49,8 @@ lint:
 	go fmt ./...
 	go vet ./...
 
-helm:
-	helm upgrade --install streamer chart/streamer -f chart/streamer/values.yaml
-
 run: build
+	@echo "Starting streamer (requires MQ running at http://localhost:8080)"
 	CSV_FILE=./data/telemetry.csv \
 	MQ_URL=http://localhost:8080 \
 	TOPIC=telemetry \
@@ -41,28 +61,9 @@ config:
 	@echo '{"topic":"telemetry","interval_ms":5000}' > $(CONFIG) && echo "wrote $(CONFIG)"
 
 clean:
-	rm -f bin/$(BINARY) $(CONFIG) coverage.out docs/
+	rm -f bin/$(BINARY) $(CONFIG) coverage.out
 
-## Create Kind cluster
-kind-create:
-	kind get clusters | grep -q $(KIND_CLUSTER) || kind create cluster --name $(KIND_CLUSTER)
-
-## Load image into Kind
-kind-load:
-	kind load docker-image $(IMAGE) --name $(KIND_CLUSTER)
-
-## Deploy to Kubernetes
-kind-deploy: kind-create docker kind-load
-	kubectl apply -f ../deployment/k8s/## Create ConfigMap from CSV
-config:
-	kubectl create configmap telemetry-csv \
-	--from-file=telemetry.csv=../data/telemetry.csv \
-	--dry-run=client -o yaml | kubectl apply -f -
-
-## Deploy to Kubernetes
-deploy: docker-build kind-load config
-	kubectl apply -f ../deployments/k8s/streamer.yaml
-
-## View logs
+# Kubernetes targets (use from root Makefile instead)
 logs:
-	kubectl logs -l app=$(APP_NAME) -f
+	@echo "Viewing streamer logs..."
+	kubectl logs -l app=streamer -n gpu-pipeline -f

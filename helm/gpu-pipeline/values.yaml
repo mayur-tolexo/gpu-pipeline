@@ -55,7 +55,6 @@ collector:
 streamer:
   image: streamer:latest
   replicas: 2
-  csv_file: "/data/telemetry.csv"
   mq_url: "http://mq-service:8080"
   topic: "telemetry"
   stream_interval_ms: 500
@@ -66,6 +65,52 @@ streamer:
     limits:
       memory: "256Mi"
       cpu: "500m"
+
+  # Storage configuration for telemetry CSV file
+  # Supports: hostPath | rwx | remote | embedded
+  storage:
+    type: embedded  # Change to: hostPath, rwx, remote, or embedded
+    
+    # hostPath mode (KIND local development)
+    # Pod will be scheduled on the specified node
+    hostPath:
+      enabled: false
+      path: /data
+      nodeName: kind-control-plane
+    
+    # RWX mode (Multi-node Kubernetes)
+    # Requires NFS or other RWX storage provisioner
+    rwx:
+      enabled: false
+      storageClassName: nfs-client
+      size: 1Gi
+      accessModes:
+        - ReadWriteMany
+    
+    # Remote fetch mode (HTTP/S3)
+    # Downloads CSV from remote URL on pod startup
+    remote:
+      enabled: false
+      url: "https://example.com/data.csv"
+      retries: 3
+      retryDelay: 5  # seconds
+    
+    # Embedded mode (CSV built into Docker image)
+    # Default mode - CSV is in the image at build time
+    embedded:
+      enabled: true
+  
+  # CSV file configuration
+  csv:
+    path: /data
+    fileName: telemetry.csv
+    waitTimeout: 120  # seconds to wait for file
+  
+  # Init container configuration
+  initContainer:
+    image: busybox:latest
+    retryCount: 30
+    retryDelay: 2  # seconds
 
 # API Gateway Configuration
 apiGateway:

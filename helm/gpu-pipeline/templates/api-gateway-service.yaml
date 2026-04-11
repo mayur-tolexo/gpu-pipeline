@@ -8,7 +8,7 @@ metadata:
     chart: {{ .Chart.Name }}-{{ .Chart.Version }}
     release: {{ .Release.Name }}
 spec:
-  type: {{ .Values.apiGateway.service.type | default "ClusterIP" }}
+  type: {{ .Values.apiGateway.service.type | default "NodePort" }}
   ports:
     - port: 8000
       targetPort: 8000

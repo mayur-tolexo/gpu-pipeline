@@ -87,7 +87,7 @@ swagger:
 # ============ Docker ============
 docker-build:
 	@echo "Building Docker image: $(IMAGE_NAME)"
-	@docker build -t $(IMAGE_NAME) .
+	@docker build -t $(IMAGE_NAME) --build-arg ROOT=. -f ./Dockerfile ..
 	@echo "✓ Docker image built successfully"
 
 docker-push:

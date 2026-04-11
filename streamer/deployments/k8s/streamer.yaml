@@ -30,5 +30,4 @@ spec:
               mountPath: /data
       volumes:
         - name: telemetry-data
-          configMap:
-            name: telemetry-csv
+          emptyDir: {}

@@ -46,15 +46,3 @@ spec:
               value: "postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}?sslmode=disable"
           resources:
             {{- toYaml .Values.collector.resources | nindent 12 }}
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: {{ .Values.collector.port }}
-            initialDelaySeconds: 15
-            periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: {{ .Values.collector.port }}
-            initialDelaySeconds: 5
-            periodSeconds: 5

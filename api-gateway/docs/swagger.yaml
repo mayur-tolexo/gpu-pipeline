@@ -1,0 +1,127 @@
+basePath: /
+definitions:
+  internal.ListGPUsResponse:
+    properties:
+      count:
+        type: integer
+      gpus:
+        items:
+          type: string
+        type: array
+    type: object
+  internal.QueryTelemetryRequest:
+    properties:
+      end_time:
+        type: string
+      gpu_id:
+        type: string
+      start_time:
+        type: string
+    required:
+    - gpu_id
+    type: object
+  internal.QueryTelemetryResponse:
+    properties:
+      count:
+        type: integer
+      end_time:
+        type: string
+      fields_available:
+        items:
+          type: string
+        type: array
+      gpu_id:
+        type: string
+      records:
+        items:
+          $ref: '#/definitions/internal.TelemetryResponse'
+        type: array
+      start_time:
+        type: string
+    type: object
+  internal.TelemetryResponse:
+    properties:
+      data:
+        additionalProperties: true
+        type: object
+      gpu_id:
+        type: string
+      timestamp:
+        type: string
+    type: object
+host: localhost:8000
+info:
+  contact: {}
+  description: Query GPU telemetry data from the central database
+  license: {}
+  termsOfService: http://swagger.io/terms/
+  title: GPU Pipeline API Gateway
+  version: "1.0"
+paths:
+  /api/v1/gpus:
+    get:
+      description: Get a list of all unique GPU IDs that have telemetry data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal.ListGPUsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: List all unique GPUs
+      tags:
+      - GPUs
+  /api/v1/health:
+    get:
+      description: Check if the API gateway is running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - Health
+  /api/v1/telemetry/query:
+    post:
+      consumes:
+      - application/json
+      description: Get telemetry data for a specific GPU with optional time-range filtering
+      parameters:
+      - description: Query parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal.QueryTelemetryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal.QueryTelemetryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Query telemetry data for a GPU
+      tags:
+      - Telemetry
+swagger: "2.0"

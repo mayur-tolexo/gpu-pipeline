@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"gpu-pipeline/api-gateway/internal"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -16,11 +17,11 @@ import (
 // @version 1.0
 // @description Query GPU telemetry data from the central database
 // @termsOfService http://swagger.io/terms/
-// @host localhost:8081
+// @host localhost:8000
 // @BasePath /
 func main() {
-	dsn := flag.String("dsn", os.Getenv("DATABASE_URL"), "PostgreSQL connection string")
-	port := flag.String("port", "8081", "Port to listen on")
+	dsn := flag.String("dsn", getEnv("DATABASE_URL", ""), "PostgreSQL connection string")
+	port := flag.String("port", getEnv("PORT", "8000"), "Port to listen on")
 	flag.Parse()
 
 	if *dsn == "" {
@@ -49,4 +50,11 @@ func main() {
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
+}
+
+func getEnv(k, d string) string {
+	if v, ok := os.LookupEnv(k); ok {
+		return v
+	}
+	return d
 }

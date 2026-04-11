@@ -1,0 +1,17 @@
+{{- if eq .Values.streamer.storage.type "rwx" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: streamer-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: streamer
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+spec:
+  accessModes:
+    {{- toYaml .Values.streamer.storage.rwx.accessModes | nindent 4 }}
+  storageClassName: {{ .Values.streamer.storage.rwx.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.streamer.storage.rwx.size }}
+{{- end }}

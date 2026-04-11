@@ -1,5 +1,5 @@
 BINARY= mq-server
-IMAGE= mq:latest
+IMAGE= mq-server:latest
 CONFIG= config.json
 KIND_CLUSTER= mq-cluster
 

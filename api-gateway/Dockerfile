@@ -3,7 +3,7 @@
 FROM golang:1.25-alpine AS builder
 WORKDIR /src
 
-ARG ROOT=..
+ARG ROOT=.
 
 COPY ${ROOT}/go.mod ${ROOT}/go.sum ./
 RUN go mod download

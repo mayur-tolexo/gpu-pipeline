@@ -6,7 +6,8 @@ REGISTRY=localhost:5000
 
 .PHONY: help kind-create kind-delete docker-build-all docker-load-all build-all test coverage \
 	deploy deploy-all verify logs logs-all cleanup watch kind-full helm-install helm-uninstall \
-	api-gateway-port-forward swagger-ui
+	api-gateway-port-forward swagger-ui streamer-copy-csv streamer-verify-csv streamer-logs \
+	streamer-describe streamer-shell streamer-events
 
 help:
 	@echo "GPU Pipeline - Available Commands"
@@ -17,7 +18,7 @@ help:
 	@echo "  make coverage           - Show test coverage"
 	@echo ""
 	@echo "Kind Cluster:"
-	@echo "  make kind-create        - Create Kind cluster"
+	@echo "  make kind-create        - Create Kind cluster with local /data mount"
 	@echo "  make kind-delete        - Delete Kind cluster"
 	@echo ""
 	@echo "Docker:"
@@ -32,13 +33,20 @@ help:
 	@echo "  make logs-all           - Show all service logs"
 	@echo "  make watch              - Watch all pods"
 	@echo ""
+	@echo "Streamer Storage (CSV File Management):"
+	@echo "  make streamer-copy-csv      - Copy CSV to ./data for KIND (hostPath mode)"
+	@echo "  make streamer-verify-csv    - Verify CSV exists in KIND node"
+	@echo "  make streamer-logs          - Stream logs from streamer pods"
+	@echo "  make streamer-describe      - Show streamer deployment details"
+	@echo ""
 	@echo "API Gateway:"
-	@echo "  make api-gateway-port-forward - Port-forward API Gateway (8000 -> 8000)"
+	@echo "  make api-gateway-port-forward - Port-forward API Gateway (8081 -> 8000)"
 	@echo "  make swagger-ui          - Open Swagger UI in browser (after port-forward)"
 	@echo ""
-	@echo "Helm:"
-	@echo "  make helm-install       - Install via Helm"
-	@echo "  make helm-uninstall     - Uninstall Helm release"
+	@echo "Helm (Unified for all services):"
+	@echo "  make helm-install       - Install all services (MQ, Streamer, Collector, etc.)"
+	@echo "  make helm-uninstall     - Uninstall all services"
+	@echo "  Note: Edit helm/gpu-pipeline/values.yaml to configure Streamer storage mode"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make cleanup            - Delete namespace (keep Kind cluster)"
@@ -78,9 +86,12 @@ kind-create:
 	@if kind get clusters | grep -q $(KIND_CLUSTER); then \
 		echo "✓ Kind cluster '$(KIND_CLUSTER)' already exists"; \
 	else \
-		echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-		kind create cluster --name $(KIND_CLUSTER) --wait 5m; \
-		echo "✓ Kind cluster created"; \
+		echo "Creating Kind cluster '$(KIND_CLUSTER)' with local mounts..."; \
+		kind create cluster --name $(KIND_CLUSTER) --config kind-config.yaml --wait 5m; \
+		echo "✓ Kind cluster created with hostPath mounts"; \
+		echo ""; \
+		echo "Directory /data will be mounted from your local ./data directory"; \
+		echo "You can copy CSV files to ./data and they'll be available in pods"; \
 	fi
 
 kind-delete:
@@ -90,7 +101,7 @@ kind-delete:
 
 # ===== Docker Build & Load =====
 
-docker-build-all: build-all
+docker-build-all:
 	@echo "Building Docker images..."
 	cd mq && make docker
 	cd streamer && make docker
@@ -98,7 +109,7 @@ docker-build-all: build-all
 	cd api-gateway && make docker-build
 	@echo "✓ All Docker images built"
 
-docker-load-all: docker-build-all
+docker-load-all:
 	@echo "Loading images into Kind cluster..."
 	kind load docker-image mq-server:latest --name $(KIND_CLUSTER)
 	kind load docker-image streamer:latest --name $(KIND_CLUSTER)
@@ -108,7 +119,7 @@ docker-load-all: docker-build-all
 
 # ===== Kubernetes Deployment =====
 
-deploy: kind-create docker-load-all deploy-all verify
+deploy: kind-create streamer-copy-csv docker-build-all docker-load-all deploy-all verify
 
 deploy-all:
 	@echo "Deploying all services to namespace $(NAMESPACE)..."
@@ -164,21 +175,59 @@ api-gateway-port-forward:
 	@echo "Port-forwarding API Gateway..."
 	@echo "Swagger UI will be available at: http://localhost:8000/swagger/"
 	@echo "API health check: http://localhost:8000/api/v1/health"
-	kubectl port-forward -n $(NAMESPACE) svc/api-gateway-service 8000:8000
+	kubectl port-forward -n $(NAMESPACE) svc/api-gateway-service 8081:8000
 
 swagger-ui:
 	@echo "Opening Swagger UI in browser..."
-	@open http://localhost:8000/swagger/ || xdg-open http://localhost:8000/swagger/ || echo "Please open http://localhost:8000/swagger/ in your browser"
+	@open http://localhost:8081/swagger/ || xdg-open http://localhost:8081/swagger/ || echo "Please open http://localhost:8081/swagger/ in your browser"
 
-# ===== Helm =====
+# ===== Streamer Storage Management =====
+
+streamer-copy-csv:
+	@echo "Copying telemetry CSV to KIND node..."
+	@if [ ! -f "./streamer/data/telemetry.csv" ]; then \
+		echo "CSV file not found at ./streamer/data/telemetry.csv"; \
+		exit 1; \
+	fi
+	@docker exec gpu-pipeline-control-plane mkdir -p /data
+	@docker cp ./streamer/data/telemetry.csv $(KIND_CLUSTER)-control-plane:/data/telemetry.csv
+	@docker exec $(KIND_CLUSTER)-control-plane ls -lh /data/telemetry.csv 2>/dev/null || echo "Note: File will be available once streamer pod starts"
+
+streamer-verify-csv:
+	@echo "Verifying CSV in KIND cluster..."
+	@docker exec $(KIND_CLUSTER)-control-plane sh -c 'if [ -f /data/telemetry.csv ]; then echo "✓ CSV found"; ls -lh /data/telemetry.csv; echo ""; echo "First 3 lines:"; head -3 /data/telemetry.csv; else echo "✗ CSV not found"; fi'
+
+streamer-logs:
+	@echo "Streamer logs:"
+	kubectl logs -n $(NAMESPACE) -l app=streamer -f --tail=100
+
+streamer-shell:
+	@echo "Connecting to streamer pod..."
+	kubectl exec -it -n $(NAMESPACE) -l app=streamer -- /bin/sh
+
+streamer-describe:
+	@echo "Streamer deployment details:"
+	kubectl describe deployment -n $(NAMESPACE) streamer
+
+streamer-events:
+	@echo "Recent events for streamer:"
+	kubectl get events -n $(NAMESPACE) --field-selector involvedObject.name=streamer --sort-by='.lastTimestamp'
+
+# ===== Helm (unified deployment for all services) =====
 
 helm-install:
-	@echo "Installing with Helm..."
+	@echo "Installing all services with Helm..."
+	@echo "This deploys: MQ, Streamer, Collector, PostgreSQL, API Gateway"
+	@echo ""
+	@echo "To configure Streamer storage mode, edit helm/gpu-pipeline/values.yaml"
+	@echo "Supported modes: embedded (default), hostPath, rwx, remote"
+	@echo "See streamer/README.md#storage-modes for details"
+	@echo ""
 	helm install gpu-pipeline ./helm/gpu-pipeline -n $(NAMESPACE) --create-namespace
-	@echo "✓ Helm installation complete"
+	@echo "✓ All services installed via Helm"
 
 helm-uninstall:
-	@echo "Uninstalling Helm release..."
+	@echo "Uninstalling all services..."
 	helm uninstall gpu-pipeline -n $(NAMESPACE)
 	@echo "✓ Helm release uninstalled"
 
@@ -189,6 +238,9 @@ cleanup:
 	kubectl delete namespace $(NAMESPACE) --ignore-not-found
 	@echo "✓ Namespace deleted"
 
-kind-full: kind-delete kind-create
-	@echo "✓ Kind cluster reset complete"
-	@$(MAKE) deploy
+kind-full: kind-delete kind-create streamer-copy-csv
+	@echo "✓ Kind cluster reset complete with CSV file ready"
+	@$(MAKE) docker-build-all
+	@$(MAKE) docker-load-all
+	@$(MAKE) deploy-all
+	@$(MAKE) verify
