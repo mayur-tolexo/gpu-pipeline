@@ -75,6 +75,47 @@ paths:
       summary: List all unique GPUs
       tags:
       - GPUs
+  /api/v1/gpus/{id}/telemetry:
+    get:
+      description: |-
+        Get all telemetry entries for a specific GPU, ordered by time
+        Supports optional time window filters with start_time and end_time query parameters (RFC3339 format)
+      parameters:
+      - description: GPU ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Start time (RFC3339 format)
+        in: query
+        name: start_time
+        type: string
+      - description: End time (RFC3339 format)
+        in: query
+        name: end_time
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Telemetry data for GPU
+          schema:
+            $ref: '#/definitions/internal.QueryTelemetryResponse'
+        "400":
+          description: Invalid time format or missing GPU ID
+          schema:
+            type: string
+        "404":
+          description: GPU not found
+          schema:
+            type: string
+        "500":
+          description: Database query error
+          schema:
+            type: string
+      summary: Get telemetry for a specific GPU
+      tags:
+      - Telemetry
   /api/v1/health:
     get:
       description: Check if the API gateway is running

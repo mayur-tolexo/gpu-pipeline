@@ -4,97 +4,49 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
-	"gorm.io/gorm"
+	"gpu-pipeline/api-gateway/pkg/interfaces"
+	"gpu-pipeline/api-gateway/pkg/models"
 )
 
-// GPUHandler handles requests related to GPU data
+// GPUHandler handles HTTP requests for GPU telemetry data
 type GPUHandler struct {
-	db *gorm.DB
+	service interfaces.TelemetryService
 }
 
 // NewGPUHandler creates a new GPU handler
-func NewGPUHandler(db *gorm.DB) *GPUHandler {
-	return &GPUHandler{db: db}
+func NewGPUHandler(service interfaces.TelemetryService) *GPUHandler {
+	return &GPUHandler{service: service}
 }
 
-// TelemetryRecord represents a telemetry record from the database
-type TelemetryRecord struct {
-	ID        int       `json:"id" gorm:"primaryKey"`
-	GPUID     string    `json:"gpu_id"`
-	Timestamp time.Time `json:"timestamp"`
-	Data      []byte    `json:"data"`
-	CreatedAt time.Time `json:"created_at"`
+// sendJSONError sends a JSON error response
+func sendJSONError(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(models.ErrorResponse{Error: message})
 }
 
-// TableName specifies the table name for Telemetry
-func (TelemetryRecord) TableName() string {
-	return "telemetry"
-}
-
-// ListGPUsResponse contains unique GPU IDs
-type ListGPUsResponse struct {
-	GPUs  []string `json:"gpus"`
-	Count int      `json:"count"`
-}
-
-// QueryTelemetryRequest represents query parameters for telemetry data
-type QueryTelemetryRequest struct {
-	GPUID     string    `json:"gpu_id" binding:"required"`
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
-}
-
-// TelemetryResponse represents a single telemetry entry
-type TelemetryResponse struct {
-	GPUID     string                 `json:"gpu_id"`
-	Timestamp time.Time              `json:"timestamp"`
-	Data      map[string]interface{} `json:"data"`
-}
-
-// QueryTelemetryResponse contains telemetry data query results
-type QueryTelemetryResponse struct {
-	GPUID           string              `json:"gpu_id"`
-	Records         []TelemetryResponse `json:"records"`
-	Count           int                 `json:"count"`
-	StartTime       time.Time           `json:"start_time"`
-	EndTime         time.Time           `json:"end_time"`
-	FieldsAvailable []string            `json:"fields_available"`
-}
 
 // ListGPUs godoc
 // @Summary List all unique GPUs
 // @Description Get a list of all unique GPU IDs that have telemetry data
 // @Tags GPUs
 // @Produce json
-// @Success 200 {object} ListGPUsResponse
-// @Failure 500 {string} string
+// @Success 200 {object} models.ListGPUsResponse
+// @Failure 500 {object} models.ErrorResponse
 // @Router /api/v1/gpus [get]
 func (h *GPUHandler) ListGPUs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		sendJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	var gpuIDs []string
-	result := h.db.Model(&TelemetryRecord{}).
-		Distinct("gpu_id").
-		Order("gpu_id ASC").
-		Pluck("gpu_id", &gpuIDs)
-
-	if result.Error != nil {
-		http.Error(w, fmt.Sprintf("query error: %v", result.Error), http.StatusInternalServerError)
+	response, err := h.service.ListGPUs()
+	if err != nil {
+		sendJSONError(w, http.StatusInternalServerError, err.Error())
 		return
-	}
-
-	if gpuIDs == nil {
-		gpuIDs = []string{} // Return empty array instead of null
-	}
-
-	response := ListGPUsResponse{
-		GPUs:  gpuIDs,
-		Count: len(gpuIDs),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -108,98 +60,118 @@ func (h *GPUHandler) ListGPUs(w http.ResponseWriter, r *http.Request) {
 // @Tags Telemetry
 // @Accept json
 // @Produce json
-// @Param request body QueryTelemetryRequest true "Query parameters"
-// @Success 200 {object} QueryTelemetryResponse
-// @Failure 400 {string} string
-// @Failure 404 {string} string
-// @Failure 500 {string} string
+// @Param request body models.QueryTelemetryRequest true "Query parameters"
+// @Success 200 {object} models.QueryTelemetryResponse
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 404 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
 // @Router /api/v1/telemetry/query [post]
 func (h *GPUHandler) QueryTelemetry(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		sendJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	var req QueryTelemetryRequest
+	var req models.QueryTelemetryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		sendJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	if req.GPUID == "" {
-		http.Error(w, "gpu_id is required", http.StatusBadRequest)
-		return
-	}
-
-	query := h.db.Where("gpu_id = ?", req.GPUID)
-
-	// Apply time range filters if provided
-	if !req.StartTime.IsZero() {
-		query = query.Where("timestamp >= ?", req.StartTime)
-	}
-	if !req.EndTime.IsZero() {
-		query = query.Where("timestamp <= ?", req.EndTime)
-	}
-
-	var records []TelemetryRecord
-	result := query.Order("timestamp DESC").Find(&records)
-
-	if result.Error != nil {
-		http.Error(w, fmt.Sprintf("query error: %v", result.Error), http.StatusInternalServerError)
-		return
-	}
-
-	if result.RowsAffected == 0 {
-		http.Error(w, fmt.Sprintf("no telemetry data found for gpu_id: %s", req.GPUID), http.StatusNotFound)
-		return
-	}
-
-	// Convert records to response format
-	telemetryResponses := make([]TelemetryResponse, len(records))
-	fieldsSet := make(map[string]bool)
-
-	for i, record := range records {
-		var data map[string]interface{}
-		if err := json.Unmarshal(record.Data, &data); err != nil {
-			// If unmarshal fails, use raw data
-			data = map[string]interface{}{"raw": string(record.Data)}
+	response, err := h.service.QueryTelemetry(&req)
+	if err != nil {
+		// Check if it's a "not found" error
+		if strings.Contains(err.Error(), "no telemetry data found") {
+			sendJSONError(w, http.StatusNotFound, err.Error())
+			return
 		}
-
-		telemetryResponses[i] = TelemetryResponse{
-			GPUID:     record.GPUID,
-			Timestamp: record.Timestamp,
-			Data:      data,
-		}
-
-		// Track available fields
-		for key := range data {
-			fieldsSet[key] = true
-		}
+		sendJSONError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	// Convert fields set to sorted list
-	fieldsAvailable := make([]string, 0, len(fieldsSet))
-	for field := range fieldsSet {
-		fieldsAvailable = append(fieldsAvailable, field)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetGPUTelemetry godoc
+// @Summary Get telemetry for a specific GPU
+// @Description Get all telemetry entries for a specific GPU, ordered by time
+// @Description Supports optional time window filters with start_time and end_time query parameters (RFC3339 format)
+// @Tags Telemetry
+// @Produce json
+// @Param id path string true "GPU ID" example(gpu-001)
+// @Param start_time query string false "Start time (RFC3339 format)" example(2026-04-11T00:00:00Z)
+// @Param end_time query string false "End time (RFC3339 format)" example(2026-04-12T23:59:59Z)
+// @Success 200 {object} models.QueryTelemetryResponse "Telemetry data for GPU"
+// @Failure 400 {object} models.ErrorResponse "Invalid time format or missing GPU ID"
+// @Failure 404 {object} models.ErrorResponse "GPU not found"
+// @Failure 500 {object} models.ErrorResponse "Database query error"
+// @Router /api/v1/gpus/{id}/telemetry [get]
+// extractGPUIDFromPath extracts GPU ID from the URL path
+func extractGPUIDFromPath(path string) (string, error) {
+	pathParts := strings.Split(path, "/")
+	if len(pathParts) < 5 {
+		return "", fmt.Errorf("invalid path")
+	}
+	gpuID := pathParts[4]
+	if gpuID == "" {
+		return "", fmt.Errorf("gpu_id is required")
+	}
+	return gpuID, nil
+}
+
+// determineErrorStatus determines the appropriate HTTP status code based on error message
+func determineErrorStatus(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "invalid") && strings.Contains(errMsg, "format") {
+		return http.StatusBadRequest
+	}
+	if strings.Contains(errMsg, "no telemetry data found") {
+		return http.StatusNotFound
+	}
+	return http.StatusInternalServerError
+}
+
+// GetGPUTelemetry godoc
+// @Summary Get telemetry for a specific GPU
+// @Description Get all telemetry entries for a specific GPU, ordered by time
+// @Description Supports optional time window filters with start_time and end_time query parameters (RFC3339 format)
+// @Tags Telemetry
+// @Produce json
+// @Param id path string true "GPU ID" example(gpu-001)
+// @Param start_time query string false "Start time (RFC3339 format)" example(2026-04-11T00:00:00Z)
+// @Param end_time query string false "End time (RFC3339 format)" example(2026-04-12T23:59:59Z)
+// @Success 200 {object} models.QueryTelemetryResponse "Telemetry data for GPU"
+// @Failure 400 {object} models.ErrorResponse "Invalid time format or missing GPU ID"
+// @Failure 404 {object} models.ErrorResponse "GPU not found"
+// @Failure 500 {object} models.ErrorResponse "Database query error"
+// @Router /api/v1/gpus/{id}/telemetry [get]
+func (h *GPUHandler) GetGPUTelemetry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		sendJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
 	}
 
-	// Set default time range if not provided
-	startTime := req.StartTime
-	endTime := req.EndTime
-	if startTime.IsZero() && len(records) > 0 {
-		startTime = records[len(records)-1].Timestamp // Oldest record
-	}
-	if endTime.IsZero() && len(records) > 0 {
-		endTime = records[0].Timestamp // Newest record
+	// Extract GPU ID from path
+	gpuID, err := extractGPUIDFromPath(r.URL.Path)
+	if err != nil {
+		sendJSONError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
-	response := QueryTelemetryResponse{
-		GPUID:           req.GPUID,
-		Records:         telemetryResponses,
-		Count:           len(records),
-		StartTime:       startTime,
-		EndTime:         endTime,
-		FieldsAvailable: fieldsAvailable,
+	// Parse query parameters for time range
+	startTimeStr := r.URL.Query().Get("start_time")
+	endTimeStr := r.URL.Query().Get("end_time")
+
+	response, err := h.service.GetGPUTelemetry(gpuID, startTimeStr, endTimeStr)
+	if err != nil {
+		statusCode := determineErrorStatus(err)
+		sendJSONError(w, statusCode, err.Error())
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -216,7 +188,7 @@ func (h *GPUHandler) QueryTelemetry(w http.ResponseWriter, r *http.Request) {
 // @Router /api/v1/health [get]
 func (h *GPUHandler) Health(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		sendJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 

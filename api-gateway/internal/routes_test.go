@@ -1,33 +1,18 @@
 package internal
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
+	"gpu-pipeline/api-gateway/pkg/models"
 )
 
 // TestRegisterRoutes tests that all routes are properly registered
 func TestRegisterRoutes(t *testing.T) {
-	mockDB, _, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("failed to create mock db: %v", err)
-	}
-	defer mockDB.Close()
-
-	dialector := postgres.New(postgres.Config{
-		Conn:       mockDB,
-		DriverName: "postgres",
-	})
-	gormDB, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open gorm: %v", err)
-	}
-
-	handler := NewGPUHandler(gormDB)
+	mockService := &MockTelemetryService{}
+	handler := NewGPUHandler(mockService)
 	mux := http.NewServeMux()
 
 	// Register routes
@@ -41,29 +26,18 @@ func TestRegisterRoutes(t *testing.T) {
 
 // TestRoutes_ListGPUEndpoint tests GET /api/v1/gpus endpoint
 func TestRoutes_ListGPUEndpoint(t *testing.T) {
-	mockDB, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("failed to create mock db: %v", err)
-	}
-	defer mockDB.Close()
-
-	dialector := postgres.New(postgres.Config{
-		Conn:       mockDB,
-		DriverName: "postgres",
-	})
-	gormDB, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open gorm: %v", err)
+	mockService := &MockTelemetryService{
+		ListGPUsFunc: func() (*models.ListGPUsResponse, error) {
+			return &models.ListGPUsResponse{
+				GPUs:  []string{"gpu-001", "gpu-002"},
+				Count: 2,
+			}, nil
+		},
 	}
 
-	handler := NewGPUHandler(gormDB)
+	handler := NewGPUHandler(mockService)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
-
-	// Mock empty result
-	rows := sqlmock.NewRows([]string{"gpu_id"})
-	mock.ExpectQuery("SELECT DISTINCT").
-		WillReturnRows(rows)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/gpus", nil)
 	w := httptest.NewRecorder()
@@ -77,22 +51,9 @@ func TestRoutes_ListGPUEndpoint(t *testing.T) {
 
 // TestRoutes_TelemetryEndpoint tests POST /api/v1/telemetry/query endpoint
 func TestRoutes_TelemetryEndpoint(t *testing.T) {
-	mockDB, _, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("failed to create mock db: %v", err)
-	}
-	defer mockDB.Close()
+	mockService := &MockTelemetryService{}
 
-	dialector := postgres.New(postgres.Config{
-		Conn:       mockDB,
-		DriverName: "postgres",
-	})
-	gormDB, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open gorm: %v", err)
-	}
-
-	handler := NewGPUHandler(gormDB)
+	handler := NewGPUHandler(mockService)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -110,22 +71,9 @@ func TestRoutes_TelemetryEndpoint(t *testing.T) {
 
 // TestRoutes_HealthEndpoint tests GET /api/v1/health endpoint
 func TestRoutes_HealthEndpoint(t *testing.T) {
-	mockDB, _, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("failed to create mock db: %v", err)
-	}
-	defer mockDB.Close()
+	mockService := &MockTelemetryService{}
 
-	dialector := postgres.New(postgres.Config{
-		Conn:       mockDB,
-		DriverName: "postgres",
-	})
-	gormDB, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open gorm: %v", err)
-	}
-
-	handler := NewGPUHandler(gormDB)
+	handler := NewGPUHandler(mockService)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -141,22 +89,9 @@ func TestRoutes_HealthEndpoint(t *testing.T) {
 
 // TestRoutes_HealthCheckReturnsOK verifies health check response format
 func TestRoutes_HealthCheckReturnsOK(t *testing.T) {
-	mockDB, _, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("failed to create mock db: %v", err)
-	}
-	defer mockDB.Close()
+	mockService := &MockTelemetryService{}
 
-	dialector := postgres.New(postgres.Config{
-		Conn:       mockDB,
-		DriverName: "postgres",
-	})
-	gormDB, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open gorm: %v", err)
-	}
-
-	handler := NewGPUHandler(gormDB)
+	handler := NewGPUHandler(mockService)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -176,29 +111,15 @@ func TestRoutes_HealthCheckReturnsOK(t *testing.T) {
 
 // TestRoutes_GPUListReturnsJSON verifies GPU list response format
 func TestRoutes_GPUListReturnsJSON(t *testing.T) {
-	mockDB, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("failed to create mock db: %v", err)
-	}
-	defer mockDB.Close()
-
-	dialector := postgres.New(postgres.Config{
-		Conn:       mockDB,
-		DriverName: "postgres",
-	})
-	gormDB, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		t.Fatalf("failed to open gorm: %v", err)
+	mockService := &MockTelemetryService{
+		ListGPUsFunc: func() (*models.ListGPUsResponse, error) {
+			return &models.ListGPUsResponse{GPUs: []string{}, Count: 0}, nil
+		},
 	}
 
-	handler := NewGPUHandler(gormDB)
+	handler := NewGPUHandler(mockService)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
-
-	// Mock empty result
-	rows := sqlmock.NewRows([]string{"gpu_id"})
-	mock.ExpectQuery("SELECT DISTINCT").
-		WillReturnRows(rows)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/gpus", nil)
 	w := httptest.NewRecorder()
@@ -207,5 +128,72 @@ func TestRoutes_GPUListReturnsJSON(t *testing.T) {
 
 	if w.Header().Get("Content-Type") != "application/json" {
 		t.Errorf("expected content-type application/json, got %s", w.Header().Get("Content-Type"))
+	}
+}
+
+// TestRoutes_GetGPUTelemetryEndpoint tests GET /api/v1/gpus/{id}/telemetry endpoint
+func TestRoutes_GetGPUTelemetryEndpoint(t *testing.T) {
+	mockService := &MockTelemetryService{
+		GetGPUTelemetryFunc: func(gpuID string, startTime, endTime string) (*models.QueryTelemetryResponse, error) {
+			return nil, fmt.Errorf("no telemetry data found for gpu_id: gpu-001")
+		},
+	}
+
+	handler := NewGPUHandler(mockService)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/gpus/gpu-001/telemetry", nil)
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, req)
+
+	// Should return 404 when no data found
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+
+	if w.Header().Get("Content-Type") != "application/json" {
+		t.Errorf("expected content-type application/json, got %s", w.Header().Get("Content-Type"))
+	}
+}
+
+// TestHandleGPUPath_InvalidPath tests handleGPUPath with invalid path format
+func TestHandleGPUPath_InvalidPath(t *testing.T) {
+	mockService := &MockTelemetryService{}
+
+	handler := NewGPUHandler(mockService)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	// Test invalid path that doesn't match /api/v1/gpus/{id}/telemetry pattern
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/gpus/gpu-001/invalid", nil)
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, req)
+
+	// Should return 404 for invalid path
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+}
+
+// TestHandleGPUPath_OnlyGPUIDPath tests handleGPUPath with only GPU ID (no /telemetry)
+func TestHandleGPUPath_OnlyGPUIDPath(t *testing.T) {
+	mockService := &MockTelemetryService{}
+
+	handler := NewGPUHandler(mockService)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	// Test path with only GPU ID and nothing after
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/gpus/gpu-001", nil)
+	w := httptest.NewRecorder()
+
+	mux.ServeHTTP(w, req)
+
+	// Should return 404 because it's not /api/v1/gpus/{id}/telemetry
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
 	}
 }

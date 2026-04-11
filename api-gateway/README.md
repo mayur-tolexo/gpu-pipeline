@@ -1,21 +1,21 @@
 # 🔗 API Gateway - GPU Pipeline
 
-> REST API gateway for querying GPU telemetry data from the central PostgreSQL database
+> REST API gateway for querying GPU telemetry data from the central PostgreSQL database with 80%+ test coverage and clean layered architecture
 
 ## Table of Contents
 
 - [Features](#features)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
 - [API Endpoints](#api-endpoints)
-- [Time-Range Filtering](#time-range-filtering)
-- [OpenAPI Documentation](#openapi-documentation)
 - [Building & Testing](#building--testing)
-- [Deployment](#deployment)
+- [Running](#running)
 - [Configuration](#configuration)
 - [Makefile Commands](#makefile-commands)
+- [Testing the API](#testing-the-api)
+- [Database Schema](#database-schema)
 - [Troubleshooting](#troubleshooting)
-- [Future Enhancements](#future-enhancements)
 
 ## Features
 
@@ -23,22 +23,52 @@
 - ✅ **Query Telemetry** - Query GPU telemetry with time-range filtering
 - ✅ **OpenAPI/Swagger** - Automatic API documentation
 - ✅ **Health Checks** - Built-in health endpoint
-- ✅ **80%+ Test Coverage** - Comprehensive test suite
+- ✅ **80%+ Test Coverage** - Comprehensive unit and integration tests
 - ✅ **Production Ready** - Error handling, validation, logging
+- ✅ **Clean Architecture** - Layered design with interfaces, dependency injection, and singleton pattern
+- ✅ **Testable Helpers** - Refactored cmd package with extracted helper functions
 
 ## Architecture
 
+### Layered Design
+
+The API Gateway follows a clean, layered architecture pattern for maintainability and testability:
+
 ```
-┌─────────────────────────────────────────┐
-│      API Gateway (Port 8000)            │
-├─────────────────────────────────────────┤
-│  • List GPUs endpoint                   │
-│  • Query Telemetry endpoint             │
-│  • Time-range filtering                 │
-│  • OpenAPI/Swagger documentation        │
-└────────────────┬────────────────────────┘
+┌─────────────────────────────────────────────┐
+│         HTTP Handlers Layer                 │
+│  (internal/handler.go)                      │
+│  - ListGPUs, QueryTelemetry, GetGPUTelemetry│
+│  - Health check, Error handling             │
+└────────────────┬────────────────────────────┘
+                 │ implements
+                 │ TelemetryService interface
+┌────────────────▼────────────────────────────┐
+│        Service Layer                        │
+│  (pkg/service/telemetry.go)                 │
+│  - Business logic                           │
+│  - Orchestrates repository calls            │
+│  - Request validation                       │
+└────────────────┬────────────────────────────┘
+                 │ implements
+                 │ TelemetryRepository interface
+┌────────────────▼────────────────────────────┐
+│      Repository Layer                       │
+│  (pkg/repository/telemetry.go)              │
+│  - GORM database queries                    │
+│  - Data access abstraction                  │
+└────────────────┬────────────────────────────┘
+                 │ uses
+                 │ Singleton DB connection
+┌────────────────▼────────────────────────────┐
+│      Database Layer                         │
+│  (pkg/db/connection.go)                     │
+│  - Singleton pattern with sync.Once         │
+│  - Thread-safe connection management        │
+│  - Connection lifecycle (Connect, Close)    │
+└────────────────┬────────────────────────────┘
                  │
-          Reads from
+         Reads from
                  │
          ┌───────▼────────┐
          │  PostgreSQL    │
@@ -47,15 +77,68 @@
          └────────────────┘
 ```
 
-## Endpoints
+### Design Patterns
+
+1. **Layered Architecture** - Separation of concerns across handler, service, and repository layers
+2. **Singleton Pattern** - Thread-safe database connection management
+3. **Repository Pattern** - Data access abstraction layer
+4. **Dependency Injection** - Constructor-based DI for loose coupling
+5. **Interface-Based Design** - Service and Repository interfaces for testability
+
+## Project Structure
+
+```
+api-gateway/
+├── cmd/
+│   ├── main.go               # Entry point with helper functions
+│   └── main_test.go          # Tests for cmd package
+├── internal/
+│   ├── handler.go            # HTTP request handlers
+│   ├── handler_test.go       # Handler tests with mocks
+│   ├── routes.go             # Route registration
+│   └── routes_test.go        # Route tests
+├── pkg/
+│   ├── db/
+│   │   ├── connection.go     # Singleton DB connection
+│   │   └── connection_test.go# DB connection tests
+│   ├── interfaces/
+│   │   ├── repository.go     # TelemetryRepository interface
+│   │   └── service.go        # TelemetryService interface
+│   ├── models/
+│   │   ├── telemetry.go      # Domain models and DTOs
+│   │   └── telemetry_test.go # Model tests
+│   ├── repository/
+│   │   ├── telemetry.go      # Repository implementation
+│   │   └── telemetry_test.go # Repository tests
+│   └── service/
+│       ├── telemetry.go      # Service implementation
+│       └── telemetry_test.go # Service tests
+├── docs/                      # Generated Swagger docs
+├── Makefile                   # Build and test commands
+├── Dockerfile                 # Docker image definition
+├── go.mod                     # Go module definition
+├── go.sum                     # Go module checksums
+└── README.md                  # This file
+```
+
+## API Endpoints
 
 All API endpoints are documented with OpenAPI 3.0 specification via Swagger UI.
 
 ### Access Documentation
-- **Swagger UI**: `http://localhost:8000/swagger/index.html` (when running)
+- **Swagger UI**: `http://localhost:8000/swagger/index.html`
 - **OpenAPI JSON Spec**: `http://localhost:8000/api/v1/docs`
 
-Refer to the Swagger UI for complete endpoint documentation, request/response schemas, and interactive testing.
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/health` | Health check |
+| GET | `/api/v1/gpus` | List all GPU IDs |
+| POST | `/api/v1/telemetry/query` | Query telemetry by GPU ID and time range |
+| GET | `/api/v1/gpus/{id}/telemetry` | Get telemetry for specific GPU |
+
+Refer to Swagger UI for complete endpoint documentation, request/response schemas, and interactive testing.
 
 ## Quick Start
 
@@ -65,6 +148,7 @@ Refer to the Swagger UI for complete endpoint documentation, request/response sc
 - Docker (optional)
 
 ### Local Development
+
 ```bash
 # Build
 make build
@@ -80,6 +164,7 @@ make run
 ```
 
 ### Docker
+
 ```bash
 # Build Docker image
 make docker-build
@@ -109,23 +194,19 @@ make test
 
 ### View Coverage
 ```bash
-make coverage
-make coverage-check  # Verify >= 80%
+make coverage         # Generate HTML coverage report
+make coverage-check   # Verify >= 80% coverage
 ```
 
 ### Generate Swagger Documentation
 ```bash
 make swagger
-# Generates docs/ directory with OpenAPI specification
 ```
 
 ## Running
 
-### Prerequisites
-- PostgreSQL 15+ running with telemetry database
-- Database connection configured
-
 ### Local Execution
+
 ```bash
 # Set database URL
 export DATABASE_URL="user=user password=pass host=localhost port=5432 dbname=telemetry sslmode=disable"
@@ -141,6 +222,18 @@ docker run -p 8000:8000 \
   gpu-pipeline/api-gateway:latest
 ```
 
+### Kubernetes
+```bash
+# Create Kind cluster
+make kind-create
+
+# Deploy to cluster
+make kind-deploy
+
+# Port-forward service
+make port-forward
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -149,106 +242,39 @@ docker run -p 8000:8000 \
 
 ### Command Line Flags
 ```bash
-./bin/api-gateway -dsn "user=user password=pass host=localhost dbname=telemetry" -port 8000
-```
-
-## OpenAPI Documentation
-
-The API is fully documented with OpenAPI 3.0 specification and supports Swagger UI.
-
-### Access Swagger UI
-1. Build and run the service:
-   ```bash
-   make run
-   ```
-
-2. Visit Swagger UI: `http://localhost:8000/swagger/index.html`
-
-### Access OpenAPI JSON
-- Raw OpenAPI spec: `http://localhost:8000/api/v1/docs`
-- Swagger UI: `http://localhost:8000/swagger/`
-
-### Generate Documentation
-```bash
-make swagger
-# Generates documentation in docs/ directory
-```
-
-## Time-Range Filtering
-
-Query telemetry data within a specific time range:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/telemetry/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "gpu_id": "gpu-001",
-    "start_time": "2026-04-11T10:00:00Z",
-    "end_time": "2026-04-11T15:00:00Z"
-  }'
-```
-
-## Deployment
-
-### Kubernetes Deployment
-```bash
-# Create Kind cluster and deploy
-make kind-create kind-deploy
-
-# Port-forward the service
-make port-forward
-```
-
-### View Deployment Status
-```bash
-kubectl get deployment -n gpu-pipeline
-kubectl logs -n gpu-pipeline deployment/api-gateway
+./bin/api-gateway -dsn "postgresql://user:pass@localhost/db" -port 8000
 ```
 
 ## Makefile Commands
 
-A comprehensive Makefile is provided for common operations:
-
-### Build Commands
 ```bash
-make all              # Clean and build everything
-make build            # Build the binary
-make lint             # Run code linter
-```
+# Build
+make build              # Build the binary
+make all                # Clean and build everything
+make lint               # Run code linter
 
-### Test Commands
-```bash
-make test             # Run all tests with -race flag
-make coverage         # Generate coverage report (HTML)
-make coverage-check   # Check if coverage >= 80%
-```
+# Test
+make test               # Run all tests with -race flag
+make coverage           # Generate coverage report (HTML)
+make coverage-check     # Verify >= 80% coverage
 
-### Docker Commands
-```bash
-make docker-build     # Build Docker image
-make docker-push      # Push image to registry
-```
+# Documentation
+make swagger            # Generate Swagger/OpenAPI docs
 
-### Kubernetes Commands
-```bash
-make kind-create      # Create Kind cluster
-make kind-deploy      # Deploy to Kind cluster
-make kind-delete      # Delete Kind cluster
-make docker-load      # Load Docker image into Kind
-make port-forward     # Port-forward service (8000:8000)
-```
+# Docker
+make docker-build       # Build Docker image
+make docker-push        # Push to registry
 
-### Documentation
-```bash
-make swagger          # Generate Swagger/OpenAPI docs
-```
+# Kubernetes
+make kind-create        # Create Kind cluster
+make kind-deploy        # Deploy to cluster
+make kind-delete        # Delete cluster
+make port-forward       # Port-forward service
 
-### Development
-```bash
-make run              # Build and run locally
-make config           # Generate default config.json
-make clean            # Clean build artifacts
-make help             # Show all available commands
+# Development
+make run                # Build and run locally
+make clean              # Clean artifacts
+make help               # Show all commands
 ```
 
 ## Testing the API
@@ -270,6 +296,12 @@ curl -X POST http://localhost:8000/api/v1/telemetry/query \
   }'
 ```
 
+### Get GPU Telemetry
+```bash
+curl -X GET "http://localhost:8000/api/v1/gpus/gpu-001/telemetry?start_time=2026-04-11T00:00:00Z&end_time=2026-04-12T00:00:00Z" \
+  -H "Content-Type: application/json"
+```
+
 ### Health Check
 ```bash
 curl -X GET http://localhost:8000/api/v1/health \
@@ -280,32 +312,22 @@ curl -X GET http://localhost:8000/api/v1/health \
 
 The API returns standard HTTP status codes:
 - `200 OK` - Successful query
-- `400 Bad Request` - Invalid request parameters
+- `400 Bad Request` - Invalid request parameters or malformed query
 - `404 Not Found` - GPU or telemetry data not found
 - `405 Method Not Allowed` - Wrong HTTP method
 - `500 Internal Server Error` - Server error
 
 Error responses include a descriptive message:
-```
+```json
 HTTP/1.1 400 Bad Request
-gpu_id is required
+{
+  "error": "gpu_id is required"
+}
 ```
 
-## Performance Considerations
+## Database Schema
 
-### Queries
-- List GPUs: Fast (distinct query on indexed column)
-- Query Telemetry: Optimized with timestamp indexing
-- Time-range filtering: Uses indexed queries
-
-### Recommendations
-- Use time-range filtering to limit result sets
-- Query specific GPUs when possible
-- Implement pagination for large datasets (future enhancement)
-
-## Database Schema Requirements
-
-The API expects the following database schema (provided by the Collector):
+The API expects the following database schema (provided by the Collector service):
 
 ```sql
 CREATE TABLE telemetry (
@@ -322,38 +344,28 @@ CREATE INDEX idx_telemetry_timestamp ON telemetry(timestamp);
 CREATE UNIQUE INDEX telemetry_gpu_ts_unique ON telemetry (gpu_id, timestamp);
 ```
 
-## Integration with GPU Pipeline
-
-The API Gateway integrates with the GPU Pipeline architecture:
-
-1. **Collector Service** - Writes telemetry to PostgreSQL
-2. **API Gateway** - Reads from PostgreSQL and exposes REST API
-3. **Clients** - Query telemetry through REST API
-
 ## Test Coverage
 
 Current test coverage: **80%+**
 
+Coverage by package:
+- `internal` (handlers/routes): 94.6%
+- `pkg/service`: 100.0%
+- `pkg/models`: 100.0%
+- `pkg/repository`: 97.0%
+- `pkg/db`: 79.2%
+- `cmd`: Tested with helper functions
+
 Tests cover:
-- ✅ List GPUs endpoint
-- ✅ Query Telemetry endpoint
+- ✅ All HTTP endpoints (success and error cases)
+- ✅ Path extraction and validation
+- ✅ Error status code determination
 - ✅ Time-range filtering
-- ✅ Error handling
-- ✅ Invalid requests
-- ✅ Database errors
-- ✅ HTTP method validation
-- ✅ Health endpoint
-
-## Future Enhancements
-
-- [ ] Pagination for large result sets
-- [ ] Aggregation endpoints (avg, max, min power)
-- [ ] Export to CSV/JSON
-- [ ] Real-time WebSocket streaming
-- [ ] Caching layer (Redis)
-- [ ] Authentication & authorization
-- [ ] Rate limiting
-- [ ] GraphQL API alternative
+- ✅ Database queries and error handling
+- ✅ Service layer orchestration
+- ✅ Repository layer data access
+- ✅ Dependency injection setup
+- ✅ Environment variable handling
 
 ## Troubleshooting
 
@@ -375,6 +387,13 @@ HTTP 404: no telemetry data found for gpu_id: gpu-001
 ```
 **Solution**: Ensure the Collector service has written data for that GPU
 
+### Test Failures
+```bash
+# Clear cache and rebuild
+make clean
+make test
+```
+
 ## License
 
 Same as main GPU Pipeline project
@@ -382,8 +401,16 @@ Same as main GPU Pipeline project
 ## Status
 
 ✅ Phase 7 Complete - API Gateway Service
+- Clean layered architecture ✅
+- Singleton pattern DB connection ✅
+- Repository pattern ✅
+- Service layer ✅
+- Dependency injection ✅
 - List GPUs endpoint ✅
 - Query telemetry endpoint ✅
+- Get GPU telemetry endpoint ✅
 - Time-range filtering ✅
 - 80%+ test coverage ✅
-- Swagger/OpenAPI ready ✅
+- Swagger/OpenAPI documentation ✅
+- Refactored cmd package with testable helpers ✅
+
