@@ -51,18 +51,18 @@ build:
 # ============ Test & Coverage ============
 test:
 	@echo "Running tests..."
-	@go test -v -race ./internal/...
+	@go test -v -race ./...
 
 coverage:
 	@echo "Running tests with coverage..."
-	@go test -coverprofile=coverage.out -covermode=atomic ./internal/... || true
+	@go test -coverprofile=coverage.out -covermode=atomic ./... || true
 	@go tool cover -func=coverage.out | tail -20
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "✓ Coverage report generated: coverage.html"
 
 coverage-check:
 	@echo "Checking if coverage >= 80%..."
-	@go test -coverprofile=coverage.out ./internal/... || true
+	@go test -coverprofile=coverage.out ./... || true
 	@TOTAL=$$(go tool cover -func=coverage.out | awk '/total:/ {print $$3}' | sed 's/%//'); \
 	if (( $$(echo "$$TOTAL >= 80" | bc -l) )); then \
 		echo "✓ Coverage: $$TOTAL% (>= 80%)"; \

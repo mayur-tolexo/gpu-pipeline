@@ -52,6 +52,65 @@ var doc = `{
                 }
             }
         },
+        "/api/v1/gpus/{id}/telemetry": {
+            "get": {
+                "description": "Get all telemetry entries for a specific GPU, ordered by time\nSupports optional time window filters with start_time and end_time query parameters (RFC3339 format)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Telemetry"
+                ],
+                "summary": "Get telemetry for a specific GPU",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "GPU ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time (RFC3339 format)",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time (RFC3339 format)",
+                        "name": "end_time",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Telemetry data for GPU",
+                        "schema": {
+                            "$ref": "#/definitions/internal.QueryTelemetryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid time format or missing GPU ID",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "GPU not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Database query error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/health": {
             "get": {
                 "description": "Check if the API gateway is running",
