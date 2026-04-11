@@ -1,0 +1,1 @@
+{"listen":":8000","mq_url":"http://mq-service:8080","db_url":"postgres://user:pass@postgres:5432/telemetry"}

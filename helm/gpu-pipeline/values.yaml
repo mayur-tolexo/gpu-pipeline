@@ -67,5 +67,22 @@ streamer:
       memory: "256Mi"
       cpu: "500m"
 
+# API Gateway Configuration
+apiGateway:
+  image: gpu-pipeline/api-gateway:latest
+  imagePullPolicy: IfNotPresent
+  replicas: 1
+  port: 8000
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
 # Image pull policy
 imagePullPolicy: IfNotPresent
+
