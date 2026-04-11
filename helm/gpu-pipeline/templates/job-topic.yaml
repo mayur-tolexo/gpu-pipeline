@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-topic
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: create-topic
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      containers:
+        - name: create-topic
+          image: curlimages/curl
+          command:
+            - sh
+            - -c
+            - |
+              sleep 10
+              echo "Creating telemetry topic with 3 partitions..."
+              curl -X POST http://mq-service:{{ .Values.mq.port }}/topics \
+              -H "Content-Type: application/json" \
+              -d '{"name":"{{ .Values.collector.topic }}","partitions":{{ .Values.collector.partitions }}}'
+              echo "Topic created successfully"
+      restartPolicy: Never

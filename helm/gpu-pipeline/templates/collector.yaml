@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: collector
+    version: "{{ .Chart.Version }}"
+spec:
+  replicas: {{ .Values.collector.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: collector
+  template:
+    metadata:
+      labels:
+        app: collector
+    spec:
+      containers:
+        - name: collector
+          image: {{ .Values.collector.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.collector.port }}
+              name: http
+              protocol: TCP
+          env:
+            - name: MQ_URL
+              value: "http://mq-service:{{ .Values.mq.port }}"
+            - name: TOPIC
+              value: "{{ .Values.collector.topic }}"
+            - name: GROUP
+              value: "{{ .Values.collector.group }}"
+            - name: PARTITIONS
+              value: "{{ .Values.collector.partitions }}"
+            - name: BATCH_SIZE
+              value: "{{ .Values.collector.batch_size }}"
+            - name: POLL_INTERVAL_MS
+              value: "{{ .Values.collector.poll_interval_ms }}"
+            - name: DB_DSN
+              value: "postgres://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}?sslmode=disable"
+          resources:
+            {{- toYaml .Values.collector.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.collector.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.collector.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5

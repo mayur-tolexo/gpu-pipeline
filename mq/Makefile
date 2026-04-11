@@ -10,8 +10,8 @@ all: build
 build:
 	go build -o bin/$(BINARY) ./cmd/mq-server
 
-docker: build
-	docker build -t $(IMAGE) .
+docker:
+	docker build -t $(IMAGE) --build-arg ROOT=. -f ./Dockerfile ..
 
 test:
 	go test ./client ./internal ./api -v

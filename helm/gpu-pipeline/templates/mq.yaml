@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mq
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: mq
+    version: "{{ .Chart.Version }}"
+spec:
+  replicas: {{ .Values.mq.replicas }}
+  selector:
+    matchLabels:
+      app: mq
+  template:
+    metadata:
+      labels:
+        app: mq
+    spec:
+      containers:
+        - name: mq
+          image: {{ .Values.mq.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.mq.port }}
+              name: http
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "{{ .Values.mq.port }}"
+          resources:
+            {{- toYaml .Values.mq.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.mq.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.mq.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
