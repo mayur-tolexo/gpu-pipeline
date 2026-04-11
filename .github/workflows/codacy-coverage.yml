@@ -25,11 +25,12 @@ jobs:
           cd mq && go test ./... -coverprofile=../mq-coverage.out -covermode=atomic && cd ..
           cd streamer && go test ./... -coverprofile=../streamer-coverage.out -covermode=atomic && cd ..
           cd collector && go test ./... -coverprofile=../collector-coverage.out -covermode=atomic && cd ..
-          
+          cd api-gateway && go test ./... -coverprofile=../api-gateway-coverage.out -covermode=atomic && cd ..
+
           # Combine coverage reports
           echo "mode: atomic" > coverage.out
-          grep -h -v "^mode:" mq-coverage.out streamer-coverage.out collector-coverage.out >> coverage.out
-          
+          grep -h -v "^mode:" mq-coverage.out streamer-coverage.out collector-coverage.out api-gateway-coverage.out >> coverage.out
+
           # Display combined coverage
           echo "=== Combined Coverage Report ==="
           go tool cover -func=coverage.out | tail -1
