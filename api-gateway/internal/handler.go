@@ -28,7 +28,6 @@ func sendJSONError(w http.ResponseWriter, statusCode int, message string) {
 	json.NewEncoder(w).Encode(models.ErrorResponse{Error: message})
 }
 
-
 // ListGPUs godoc
 // @Summary List all unique GPUs
 // @Description Get a list of all unique GPU IDs that have telemetry data
@@ -46,46 +45,6 @@ func (h *GPUHandler) ListGPUs(w http.ResponseWriter, r *http.Request) {
 	response, err := h.service.ListGPUs()
 	if err != nil {
 		sendJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
-}
-
-// QueryTelemetry godoc
-// @Summary Query telemetry data for a GPU
-// @Description Get telemetry data for a specific GPU with optional time-range filtering
-// @Tags Telemetry
-// @Accept json
-// @Produce json
-// @Param request body models.QueryTelemetryRequest true "Query parameters"
-// @Success 200 {object} models.QueryTelemetryResponse
-// @Failure 400 {object} models.ErrorResponse
-// @Failure 404 {object} models.ErrorResponse
-// @Failure 500 {object} models.ErrorResponse
-// @Router /api/v1/telemetry/query [post]
-func (h *GPUHandler) QueryTelemetry(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		sendJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	var req models.QueryTelemetryRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendJSONError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	response, err := h.service.QueryTelemetry(&req)
-	if err != nil {
-		// Check if it's a "not found" error
-		if strings.Contains(err.Error(), "no telemetry data found") {
-			sendJSONError(w, http.StatusNotFound, err.Error())
-			return
-		}
-		sendJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

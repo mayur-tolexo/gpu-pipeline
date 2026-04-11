@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,8 +14,8 @@ import (
 
 // MockTelemetryService is a mock implementation of TelemetryService interface
 type MockTelemetryService struct {
-	ListGPUsFunc       func() (*models.ListGPUsResponse, error)
-	QueryTelemetryFunc func(*models.QueryTelemetryRequest) (*models.QueryTelemetryResponse, error)
+	ListGPUsFunc        func() (*models.ListGPUsResponse, error)
+	QueryTelemetryFunc  func(*models.QueryTelemetryRequest) (*models.QueryTelemetryResponse, error)
 	GetGPUTelemetryFunc func(gpuID string, startTime, endTime string) (*models.QueryTelemetryResponse, error)
 }
 
@@ -144,115 +143,6 @@ func TestListGPUs_Error(t *testing.T) {
 	}
 }
 
-// TestQueryTelemetry_Success tests successful telemetry query
-func TestQueryTelemetry_Success(t *testing.T) {
-	now := time.Now()
-	mockService := &MockTelemetryService{
-		QueryTelemetryFunc: func(req *models.QueryTelemetryRequest) (*models.QueryTelemetryResponse, error) {
-			return &models.QueryTelemetryResponse{
-				GPUID: "gpu-001",
-				Records: []models.TelemetryResponse{
-					{
-						GPUID:     "gpu-001",
-						Timestamp: now,
-						Data: map[string]interface{}{
-							"power":       250.5,
-							"temperature": 75.2,
-						},
-					},
-				},
-				Count:           1,
-				StartTime:       now,
-				EndTime:         now,
-				FieldsAvailable: []string{"power", "temperature"},
-			}, nil
-		},
-	}
-
-	handler := NewGPUHandler(mockService)
-
-	queryReq := models.QueryTelemetryRequest{
-		GPUID:     "gpu-001",
-		StartTime: now.Add(-1 * time.Hour),
-		EndTime:   now.Add(1 * time.Hour),
-	}
-
-	body, _ := json.Marshal(queryReq)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/telemetry/query", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-
-	handler.QueryTelemetry(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-
-	var response models.QueryTelemetryResponse
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Errorf("failed to decode response: %v", err)
-	}
-
-	if response.GPUID != "gpu-001" {
-		t.Errorf("expected gpu-001, got %s", response.GPUID)
-	}
-	if response.Count != 1 {
-		t.Errorf("expected 1 record, got %d", response.Count)
-	}
-}
-
-// TestQueryTelemetry_InvalidJSON tests invalid JSON body
-func TestQueryTelemetry_InvalidJSON(t *testing.T) {
-	handler := NewGPUHandler(&MockTelemetryService{})
-
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/telemetry/query", bytes.NewReader([]byte("invalid")))
-	w := httptest.NewRecorder()
-
-	handler.QueryTelemetry(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-// TestQueryTelemetry_NoData tests query with no results
-func TestQueryTelemetry_NoData(t *testing.T) {
-	mockService := &MockTelemetryService{
-		QueryTelemetryFunc: func(req *models.QueryTelemetryRequest) (*models.QueryTelemetryResponse, error) {
-			return nil, fmt.Errorf("no telemetry data found for gpu_id: gpu-missing")
-		},
-	}
-
-	handler := NewGPUHandler(mockService)
-
-	queryReq := models.QueryTelemetryRequest{
-		GPUID: "gpu-missing",
-	}
-
-	body, _ := json.Marshal(queryReq)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/telemetry/query", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-
-	handler.QueryTelemetry(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-// TestQueryTelemetry_WrongMethod tests wrong HTTP method
-func TestQueryTelemetry_WrongMethod(t *testing.T) {
-	handler := NewGPUHandler(&MockTelemetryService{})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/telemetry/query", nil)
-	w := httptest.NewRecorder()
-
-	handler.QueryTelemetry(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected 405, got %d", w.Code)
-	}
-}
-
 // TestHealth_Success tests health check
 func TestHealth_Success(t *testing.T) {
 	handler := NewGPUHandler(&MockTelemetryService{})
@@ -302,8 +192,8 @@ func TestGetGPUTelemetry_Success(t *testing.T) {
 						GPUID:     "gpu-001",
 						Timestamp: now,
 						Data: map[string]interface{}{
-							"gpu_util": 45,
-							"memory":   8192,
+							"gpu_util":    45,
+							"memory":      8192,
 							"temperature": 65,
 						},
 					},
