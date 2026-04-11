@@ -575,3 +575,170 @@ func TestStore_Insert_WithNullValues(t *testing.T) {
 		t.Errorf("expected nil for optional field")
 	}
 }
+
+// Tests for new helper functions
+
+func TestValidateRecord_Valid(t *testing.T) {
+	record := map[string]interface{}{
+		"gpu_id":    "gpu-001",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	err := validateRecord(record)
+	if err != nil {
+		t.Fatalf("expected no error for valid record, got %v", err)
+	}
+}
+
+func TestValidateRecord_MissingGPUID(t *testing.T) {
+	record := map[string]interface{}{
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	err := validateRecord(record)
+	if err == nil {
+		t.Fatalf("expected error for missing gpu_id")
+	}
+}
+
+func TestValidateRecord_MissingTimestamp(t *testing.T) {
+	record := map[string]interface{}{
+		"gpu_id": "gpu-001",
+	}
+
+	err := validateRecord(record)
+	if err == nil {
+		t.Fatalf("expected error for missing timestamp")
+	}
+}
+
+func TestValidateRecord_EmptyGPUID(t *testing.T) {
+	record := map[string]interface{}{
+		"gpu_id":    "",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	err := validateRecord(record)
+	if err == nil {
+		t.Fatalf("expected error for empty gpu_id")
+	}
+}
+
+func TestValidateRecord_InvalidTimestampFormat(t *testing.T) {
+	record := map[string]interface{}{
+		"gpu_id":    "gpu-001",
+		"timestamp": "invalid-timestamp",
+	}
+
+	err := validateRecord(record)
+	if err == nil {
+		t.Fatalf("expected error for invalid timestamp format")
+	}
+}
+
+func TestMarshallRecord_Success(t *testing.T) {
+	record := map[string]interface{}{
+		"gpu_id":    "gpu-001",
+		"timestamp": "2026-04-11T10:00:00Z",
+		"data":      "test",
+	}
+
+	data, err := marshallRecord(record)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(data) == 0 {
+		t.Fatalf("expected non-empty data")
+	}
+
+	var unmarshaled map[string]interface{}
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if unmarshaled["gpu_id"] != "gpu-001" {
+		t.Errorf("expected gpu_id gpu-001, got %v", unmarshaled["gpu_id"])
+	}
+}
+
+func TestParseTimestamp_Valid(t *testing.T) {
+	tsStr := "2026-04-11T10:00:00Z"
+	ts, err := parseTimestamp(tsStr)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if ts.IsZero() {
+		t.Fatalf("expected non-zero timestamp")
+	}
+}
+
+func TestParseTimestamp_Invalid(t *testing.T) {
+	tsStr := "not-a-timestamp"
+	_, err := parseTimestamp(tsStr)
+	if err == nil {
+		t.Fatalf("expected error for invalid timestamp")
+	}
+}
+
+func TestCreateTelemetry_Success(t *testing.T) {
+	record := map[string]interface{}{
+		"gpu_id":    "gpu-001",
+		"timestamp": "2026-04-11T10:00:00Z",
+	}
+	data := []byte(`{"gpu_id":"gpu-001"}`)
+
+	telemetry, err := createTelemetry(record, data)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if telemetry.GPUID != "gpu-001" {
+		t.Errorf("expected GPUID gpu-001, got %s", telemetry.GPUID)
+	}
+
+	if len(telemetry.Data) != len(data) {
+		t.Errorf("expected data length %d, got %d", len(data), len(telemetry.Data))
+	}
+}
+
+func TestCreateTelemetry_InvalidTimestamp(t *testing.T) {
+	record := map[string]interface{}{
+		"gpu_id":    "gpu-001",
+		"timestamp": "invalid",
+	}
+	data := []byte(`{"gpu_id":"gpu-001"}`)
+
+	_, err := createTelemetry(record, data)
+	if err == nil {
+		t.Fatalf("expected error for invalid timestamp")
+	}
+}
+
+func TestStoreInsert_NilStore(t *testing.T) {
+	var s *Store
+	record := map[string]interface{}{
+		"gpu_id":    "gpu-001",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	err := s.insert(record)
+	if err == nil {
+		t.Fatalf("expected error for nil store")
+	}
+}
+
+func TestStoreInsert_InvalidRecord(t *testing.T) {
+	// Create a minimal store with nil db (to avoid DB operations)
+	s := &Store{db: nil}
+	record := map[string]interface{}{
+		"gpu_id": "gpu-001",
+		// missing timestamp
+	}
+
+	err := s.insert(record)
+	if err == nil {
+		t.Fatalf("expected error for invalid record")
+	}
+}
