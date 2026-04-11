@@ -104,13 +104,22 @@ func (p *Partition) Get(offset int64) (Message, error) {
 func (p *Partition) ReadFrom(offset int64, max int) ([]Message, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+	
 	tail := int64(len(p.messages))
-	if offset < 0 || offset > tail {
+	
+	// Validate offset range
+	if offset < 0 {
 		return []Message{}, ErrOffsetOutOfRange
 	}
+	if offset > tail {
+		return []Message{}, ErrOffsetOutOfRange
+	}
+	
+	// If reading from tail, return empty slice (no messages available)
 	if offset == tail {
 		return []Message{}, nil
 	}
+	
 	start := int(offset)
 	end := len(p.messages)
 	if max > 0 {
@@ -119,6 +128,7 @@ func (p *Partition) ReadFrom(offset int64, max int) ([]Message, error) {
 			end = candidate
 		}
 	}
+	
 	// Return a copy to avoid data races if caller mutates
 	out := make([]Message, end-start)
 	copy(out, p.messages[start:end])
@@ -127,14 +137,26 @@ func (p *Partition) ReadFrom(offset int64, max int) ([]Message, error) {
 
 // Commit records a consumer group's offset. The committed offset must be between 0 and TailOffset().
 // This implementation avoids holding the partition-wide lock while updating per-consumer offsets.
+// Returns ErrCommitTooLarge if offset > tail or if offset is negative.
 func (p *Partition) Commit(consumer string, offset int64) error {
+	// Validate consumer group name
+	if consumer == "" {
+		return errors.New("consumer group name cannot be empty")
+	}
+	
 	// read tail under RLock only to validate bounds
 	p.mu.RLock()
 	tail := int64(len(p.messages))
 	p.mu.RUnlock()
-	if offset < 0 || offset > tail {
+	
+	// Validate offset range
+	if offset < 0 {
 		return ErrCommitTooLarge
 	}
+	if offset > tail {
+		return ErrCommitTooLarge
+	}
+	
 	// try to load existing atomic counter
 	if v, ok := p.offsets.Load(consumer); ok {
 		ai := v.(*atomic.Int64)
@@ -154,4 +176,84 @@ func (p *Partition) Offset(consumer string) int64 {
 		return v.(*atomic.Int64).Load()
 	}
 	return 0
+}
+
+// GetMinConsumerOffset finds the minimum committed offset across all consumer groups.
+// This represents the watermark - messages before this offset can be safely deleted
+// since all consumers have progressed past them.
+func (p *Partition) GetMinConsumerOffset() int64 {
+	var minOffset int64 = -1
+
+	p.offsets.Range(func(key, value interface{}) bool {
+		offset := value.(*atomic.Int64).Load()
+		if minOffset == -1 || offset < minOffset {
+			minOffset = offset
+		}
+		return true
+	})
+
+	// If no consumers have committed yet, return 0 (nothing can be cleaned)
+	if minOffset == -1 {
+		return 0
+	}
+
+	return minOffset
+}
+
+// Compact removes messages before the watermark (minimum committed offset).
+// It adjusts all consumer offsets accordingly. Returns the number of messages compacted.
+// This is a watermark-based cleanup strategy: messages are only deleted once ALL
+// consumer groups have consumed them.
+func (p *Partition) Compact() (int64, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if len(p.messages) == 0 {
+		return 0, nil
+	}
+
+	// Find minimum offset across all consumer groups
+	var minOffset int64 = -1
+
+	p.offsets.Range(func(key, value interface{}) bool {
+		offset := value.(*atomic.Int64).Load()
+		if minOffset == -1 || offset < minOffset {
+			minOffset = offset
+		}
+		return true
+	})
+
+	// If no consumers or all at the beginning, nothing to clean
+	if minOffset == -1 || minOffset <= 0 {
+		return 0, nil
+	}
+
+	// Ensure minOffset doesn't exceed available messages
+	if minOffset > int64(len(p.messages)) {
+		minOffset = int64(len(p.messages))
+	}
+
+	// Nothing to compact if minOffset is 0
+	if minOffset == 0 {
+		return 0, nil
+	}
+
+	compactedCount := minOffset
+
+	// Remove messages up to minOffset
+	p.messages = p.messages[minOffset:]
+
+	// Adjust all consumer offsets by subtracting the compacted count
+	p.offsets.Range(func(key, value interface{}) bool {
+		ai := value.(*atomic.Int64)
+		currentOffset := ai.Load()
+		newOffset := currentOffset - minOffset
+		if newOffset < 0 {
+			newOffset = 0
+		}
+		ai.Store(newOffset)
+		return true
+	})
+
+	return compactedCount, nil
 }
