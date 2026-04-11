@@ -1,15 +1,20 @@
-FROM golang:1.22 AS builder
+FROM golang:1.25-alpine AS builder
 
-WORKDIR /app
+WORKDIR /src
+
+ARG ROOT=..
+
+COPY ${ROOT}/go.mod ${ROOT}/go.sum ./
+RUN go mod download
 COPY . .
 
-RUN go mod tidy
-RUN go build -o streamer cmd/main.go
+RUN apk add --no-cache git build-base
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/streamer ./streamer/cmd
 
 FROM gcr.io/distroless/base-debian12
 
 WORKDIR /
-COPY --from=builder /app/streamer /streamer
+COPY --from=builder /out/streamer /streamer
 
 # CSV mounted via volume
 VOLUME ["/data"]

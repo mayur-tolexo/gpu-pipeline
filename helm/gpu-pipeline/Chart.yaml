@@ -1,0 +1,13 @@
+apiVersion: v2
+name: gpu-pipeline
+description: A Helm chart for GPU Pipeline telemetry system
+type: application
+version: 1.0.0
+appVersion: "1.0"
+keywords:
+  - gpu
+  - telemetry
+  - pipeline
+  - message-queue
+maintainers:
+  - name: GPU Pipeline Team

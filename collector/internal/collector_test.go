@@ -81,6 +81,9 @@ func TestCollector_RunProcessesMessages(t *testing.T) {
 
 	// wait for context to expire
 	<-ctx.Done()
+	
+	// Give goroutine time to exit
+	time.Sleep(10 * time.Millisecond)
 
 	if atomic.LoadInt32(&called) == 0 {
 		t.Fatalf("expected InsertFunc to be called at least once")
@@ -424,3 +427,4 @@ func TestNewCollectorWithClient_DBInitError(t *testing.T) {
 		}
 	}
 }
+

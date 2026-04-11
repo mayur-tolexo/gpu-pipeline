@@ -9,33 +9,77 @@
 ## 📑 Table of Contents
 
 1. [Overview](#overview)
-2. [Architecture](#architecture)
-3. [Quick Start](#quick-start)
+2. [Quick Start](#quick-start)
+3. [Architecture](#architecture)
 4. [Services](#services)
-5. [Deployment](#deployment)
-6. [Local Development](#local-development)
-7. [Kubernetes Deployment](#kubernetes-deployment)
-8. [Helm Deployment](#helm-deployment)
-9. [Verification & Testing](#verification--testing)
-10. [Troubleshooting](#troubleshooting)
-11. [Development Roadmap](#development-roadmap)
-12. [Tech Stack](#tech-stack)
+5. [Build & Test](#build--test)
+6. [Deployment](#deployment)
+7. [Commands Reference](#commands-reference)
+8. [Project Status](#project-status)
+9. [Tech Stack](#tech-stack)
 
 ---
 
 ## Overview
 
-This project implements an elastic, scalable telemetry pipeline for GPU clusters using a custom-built message queue (without Kafka/RabbitMQ).
+This project implements an elastic, scalable telemetry pipeline for GPU clusters using a custom-built message queue.
 
-The system is designed with a strong focus on:
-- **Decoupled architecture** - Independent, scalable services
-- **Reusability** - Generic message queue infrastructure
-- **Scalability & fault tolerance** - Horizontal scaling with Kubernetes
-- **Production-ready** - 80%+ test coverage, graceful shutdown, error recovery
+### Key Features
+- ✅ **Decoupled Microservices** - Independent, scalable services
+- ✅ **Custom Message Queue** - Partitioned, pull-based system (no Kafka/RabbitMQ)
+- ✅ **Production Ready** - 80%+ test coverage across all services
+- ✅ **Kubernetes Native** - Full K8s + Helm deployment support
+- ✅ **Standardized Build System** - Consistent Makefiles across services
+- ✅ **Graceful Shutdown** - Context-based cancellation and error recovery
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Go 1.25+
+- Docker
+- Kubernetes (Kind recommended for local)
+- kubectl
+- Helm 3 (optional, for Helm deployment)
+
+### Option 1: Local Build (Fastest)
+```bash
+# Build all services
+make build-all
+
+# Run tests
+make test
+
+# Check coverage
+make coverage
+
+# Verify binaries
+ls -la mq/bin/ collector/bin/ streamer/bin/
+```
+
+### Option 2: Docker & Kubernetes (Full Stack)
+```bash
+# One-command deployment to Kind cluster
+make deploy
+
+# Verify deployment
+make verify
+
+# Watch pods
+make watch
+
+# View logs
+make logs-all
+
+# Clean up
+make cleanup
+```
 
 ---
 
 ## Architecture
+
 The system is composed of independently deployable services:
 
 ```
@@ -56,48 +100,104 @@ The system is composed of independently deployable services:
 └─────────────────────────────────────────────────────────┘
 ```
 
+---
+
 ## Services
 
 ### 📡 Telemetry Streamer
-- **Role**: Generates and streams telemetry data from CSV in a continuous loop
+- **Binary**: `./streamer/bin/streamer`
+- **Role**: Streams CSV telemetry data to MQ
 - **Status**: ✅ Complete
-- **Replicas**: 2 (configurable)
-- **Rate**: 500ms interval (configurable)
+- **Test Coverage**: 91.8%
+- **Features**:
+  - CSV streaming with configurable intervals
+  - Graceful shutdown with context cancellation
+  - Publisher interface for dependency injection
+  - Configurable batch processing
 
 ### 📨 Custom Message Queue (MQ)
+- **Binary**: `./mq/bin/mq-server`
 - **Role**: Partitioned, pull-based messaging system
-- **Status**: ✅ Complete (100% tested)
+- **Status**: ✅ Complete
+- **Test Coverage**: 85.4% (internal)
 - **Features**:
-  - At-least-once delivery
+  - At-least-once delivery semantics
   - Consumer groups with offset tracking
   - Partition-based scalability and ordering
-  - Horizontal scalability
-- **Replicas**: 1
+  - REST API endpoints
+  - HTTP server on `:8080`
 
 ### 💾 Telemetry Collector
-- **Role**: Consumes messages from MQ, stores in PostgreSQL with idempotency
-- **Status**: ✅ Complete (80% test coverage)
+- **Binary**: `./collector/bin/collector`
+- **Role**: Consumes messages from MQ, stores in PostgreSQL
+- **Status**: ✅ Complete
+- **Test Coverage**: 80.0%
 - **Features**:
   - Singleton GORM connection with pgbouncer support
-  - Unique constraint on (gpu_id, timestamp) for exactly-once semantics
+  - Idempotent writes with unique constraint (gpu_id, timestamp)
   - Batch processing with configurable poll interval
   - Graceful error handling and recovery
-- **Replicas**: 2+ (auto-scales in Kubernetes)
 
 ### 🗄️ PostgreSQL
-- **Role**: Central data store for telemetry
 - **Version**: 15-Alpine
+- **Role**: Central data store for telemetry
 - **Storage**: Persistent volume
 
 ---
 
-## Quick Start
+## Build & Test
 
-### 📋 Prerequisites
-- Docker
-- Kubernetes (Kind recommended for local)
-- kubectl
-- Helm (for Helm deployment)
+### Building Services
+
+From root directory, build all services:
+```bash
+make build-all
+```
+
+Binary locations:
+- MQ: `mq/bin/mq-server`
+- Streamer: `streamer/bin/streamer`
+- Collector: `collector/bin/collector`
+
+Or build individual services:
+```bash
+cd mq && make build
+cd streamer && make build
+cd collector && make build
+```
+
+### Running Tests
+
+```bash
+# Test all services
+make test
+
+# Test individual service
+cd mq && make test
+cd streamer && make test
+cd collector && make test
+```
+
+### Test Coverage
+
+```bash
+# View coverage for all services
+make coverage
+
+# View coverage for individual service
+cd mq && make coverage
+cd streamer && make coverage
+cd collector && make coverage
+```
+
+#### Current Coverage Status
+| Service  | Coverage | Status |
+|----------|----------|--------|
+| MQ       | 85.4%    | ✅     |
+| Streamer | 91.8%    | ✅     |
+| Collector| 80.0%    | ✅     |
+
+All services exceed the 80% coverage target.
 
 ### 🚀 Deploy to Kind Cluster (One Command)
 

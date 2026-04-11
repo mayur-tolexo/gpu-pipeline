@@ -95,3 +95,140 @@ func TestQueue_AckInvalidArgs(t *testing.T) {
 		t.Fatalf("expected ErrPartitionRange")
 	}
 }
+
+func TestQueue_GetTopic(t *testing.T) {
+	q := NewQueue(0)
+	q.CreateTopic("t1", 3, 0)
+
+	// get existing topic
+	topic, err := q.GetTopic("t1")
+	if err != nil {
+		t.Fatalf("GetTopic failed: %v", err)
+	}
+	if topic == nil {
+		t.Fatalf("expected topic, got nil")
+	}
+	if topic.Name() != "t1" {
+		t.Fatalf("expected topic name t1, got %s", topic.Name())
+	}
+
+	// get non-existent topic
+	topic, err = q.GetTopic("missing")
+	if err != ErrTopicNotFound {
+		t.Fatalf("expected ErrTopicNotFound, got %v", err)
+	}
+	if topic != nil {
+		t.Fatalf("expected nil topic")
+	}
+}
+
+func TestQueue_ListTopics(t *testing.T) {
+	q := NewQueue(0)
+	
+	// empty queue
+	topics := q.ListTopics()
+	if len(topics) != 0 {
+		t.Fatalf("expected 0 topics, got %d", len(topics))
+	}
+
+	// create multiple topics
+	q.CreateTopic("t1", 3, 0)
+	q.CreateTopic("t2", 2, 0)
+	q.CreateTopic("t3", 1, 0)
+
+	topics = q.ListTopics()
+	if len(topics) != 3 {
+		t.Fatalf("expected 3 topics, got %d", len(topics))
+	}
+
+	// verify topic names
+	names := make(map[string]bool)
+	for _, topicName := range topics {
+		names[topicName] = true
+	}
+	if !names["t1"] || !names["t2"] || !names["t3"] {
+		t.Fatalf("expected t1, t2, t3 topics")
+	}
+}
+
+func TestConsumerGroup_Name(t *testing.T) {
+	// Create a topic first for the consumer group
+	topic := NewTopic("test-topic", 2, 0)
+	cg := NewConsumerGroup("group1", topic)
+	if cg.Name() != "group1" {
+		t.Fatalf("expected group1, got %s", cg.Name())
+	}
+}
+
+func TestTopic_Name(t *testing.T) {
+	topic := NewTopic("mytopic", 3, 0)
+	if topic.Name() != "mytopic" {
+		t.Fatalf("expected mytopic, got %s", topic.Name())
+	}
+}
+
+func TestTopic_Replicas(t *testing.T) {
+	topic := NewTopicWithReplicas("t1", 3, 0, 2)
+	if topic.Replicas() != 2 {
+		t.Fatalf("expected 2 replicas, got %d", topic.Replicas())
+	}
+}
+
+func TestTopic_SetPartitioner(t *testing.T) {
+	topic := NewTopic("t1", 3, 0)
+	
+	// custom partitioner that always returns partition 0
+	customPartitioner := func(key string) int {
+		return 0
+	}
+	
+	topic.SetPartitioner(customPartitioner)
+	
+	// produce message - should go to partition 0
+	msg := Message{Key: "any-key", Payload: []byte("test"), Timestamp: time.Now()}
+	p, _, err := topic.Produce(msg)
+	if err != nil {
+		t.Fatalf("produce failed: %v", err)
+	}
+	if p != 0 {
+		t.Fatalf("expected partition 0, got %d", p)
+	}
+}
+
+func TestQueue_ComplexWorkflow(t *testing.T) {
+	q := NewQueue(0)
+
+	// create topic with 2 partitions
+	if err := q.CreateTopic("events", 2, 0); err != nil {
+		t.Fatalf("create topic failed: %v", err)
+	}
+
+	// publish multiple messages
+	for i := 0; i < 10; i++ {
+		msg := Message{
+			Key:     "user-" + string(rune(i%3)),
+			Payload: []byte("event-" + string(rune(i))),
+			Timestamp: time.Now(),
+		}
+		_, _, err := q.Publish("events", msg)
+		if err != nil {
+			t.Fatalf("publish failed: %v", err)
+		}
+	}
+
+	// consume from both partitions
+	for p := 0; p < 2; p++ {
+		msgs, err := q.Consume("events", "group1", p, 100)
+		if err != nil {
+			t.Fatalf("consume partition %d failed: %v", p, err)
+		}
+		if len(msgs) == 0 {
+			t.Fatalf("expected messages in partition %d", p)
+		}
+
+		// ack all messages
+		if err := q.Ack("events", "group1", p, int64(len(msgs))); err != nil {
+			t.Fatalf("ack partition %d failed: %v", p, err)
+		}
+	}
+}

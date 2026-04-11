@@ -1,0 +1,71 @@
+# Default values for gpu-pipeline Helm chart
+
+namespace: gpu-pipeline
+
+# PostgreSQL Configuration
+postgres:
+  image: postgres:15-alpine
+  replicas: 1
+  port: 5432
+  user: user
+  password: pass
+  database: telemetry
+  storage: 10Gi
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# MQ Configuration
+mq:
+  image: mq-server:latest
+  replicas: 1
+  port: 8080
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Collector Configuration
+collector:
+  image: collector:latest
+  replicas: 2
+  port: 8081
+  mq_url: "http://mq-service:8080"
+  topic: "telemetry"
+  group: "collector-group"
+  partitions: 3
+  batch_size: 10
+  poll_interval_ms: 500
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+
+# Streamer Configuration
+streamer:
+  image: streamer:latest
+  replicas: 2
+  csv_file: "/data/telemetry.csv"
+  mq_url: "http://mq-service:8080"
+  topic: "telemetry"
+  stream_interval_ms: 500
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+
+# Image pull policy
+imagePullPolicy: IfNotPresent

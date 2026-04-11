@@ -1,54 +1,59 @@
 # App
-APP_NAME=streamer
-MAIN=cmd/main.go
+BINARY= streamer
+IMAGE= streamer:latest
+CONFIG= config.json
+KIND_CLUSTER= mq-cluster
 
-# Image
-IMAGE_NAME=streamer:latest
-KIND_CLUSTER=mq-cluster
+.PHONY: all build docker test coverage lint helm run clean config kind-create kind-load kind-deploy kind-delete
 
-.PHONY: build run test docker-build docker-run kind-load deploy logs
+all: build
 
-## Build binary
 build:
-	go build -o bin/$(APP_NAME) $(MAIN)
+	go build -o bin/$(BINARY) ./cmd
 
-## Run locally
-run:
+docker:
+	docker build -t $(IMAGE) --build-arg ROOT=. -f ./Dockerfile ..
+
+test:
+	go test ./internal -v
+
+coverage:
+	@echo "Running streamer tests with coverage..."
+	@go test ./internal -coverprofile=coverage.out || true
+	@go tool cover -func=coverage.out | sed -n '1,200p'
+	@TOTAL=$$(go tool cover -func=coverage.out | awk '/total:/ {print $$3}'); echo "Total coverage: $$TOTAL"
+
+lint:
+	go fmt ./...
+	go vet ./...
+
+helm:
+	helm upgrade --install streamer chart/streamer -f chart/streamer/values.yaml
+
+run: build
 	CSV_FILE=./data/telemetry.csv \
 	MQ_URL=http://localhost:8080 \
 	TOPIC=telemetry \
 	STREAM_INTERVAL_MS=5000 \
-	./bin/$(APP_NAME)
+	./bin/$(BINARY)
 
-## Run tests
-test:
-	go test ./... -cover
+config:
+	@echo '{"topic":"telemetry","interval_ms":5000}' > $(CONFIG) && echo "wrote $(CONFIG)"
 
-coverage:
-	@echo "Running streamer tests with coverage..."
-	@go test ./... -coverprofile=coverage.out || true
-	@go tool cover -func=coverage.out | sed -n '1,200p'
-	@TOTAL=$$(go tool cover -func=coverage.out | awk '/total:/ {print $$3}'); echo "Total coverage: $$TOTAL"
+clean:
+	rm -f bin/$(BINARY) $(CONFIG) coverage.out docs/
 
-## Build Docker image
-docker-build:
-	docker build -t $(IMAGE_NAME) .
-
-## Run Docker (mount CSV)
-docker-run:
-	docker run -it --rm \
-	-e CSV_FILE=/data/telemetry.csv \
-	-e MQ_URL=http://host.docker.internal:8080 \
-	-e TOPIC=telemetry \
-	-e STREAM_INTERVAL_MS=5000 \
-	-v $(PWD)/data:/data \
-	$(IMAGE_NAME)
+## Create Kind cluster
+kind-create:
+	kind get clusters | grep -q $(KIND_CLUSTER) || kind create cluster --name $(KIND_CLUSTER)
 
 ## Load image into Kind
 kind-load:
-	kind load docker-image $(IMAGE_NAME) --name $(KIND_CLUSTER)
+	kind load docker-image $(IMAGE) --name $(KIND_CLUSTER)
 
-## Create ConfigMap from CSV
+## Deploy to Kubernetes
+kind-deploy: kind-create docker kind-load
+	kubectl apply -f ../deployment/k8s/## Create ConfigMap from CSV
 config:
 	kubectl create configmap telemetry-csv \
 	--from-file=telemetry.csv=../data/telemetry.csv \
