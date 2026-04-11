@@ -12,14 +12,7 @@ import (
 )
 
 func main() {
-	cfg := collector.Config{
-		BaseURL:      os.Getenv("MQ_URL"),
-		Topic:        os.Getenv("TOPIC"),
-		Group:        os.Getenv("GROUP"),
-		Partitions:   3,
-		BatchSize:    10,
-		PollInterval: 500 * time.Millisecond,
-	}
+	cfg := collector.LoadConfig()
 	dsn := os.Getenv("DB_DSN")
 	col, err := collector.NewCollector(cfg, dsn)
 	if err != nil {

@@ -2,6 +2,7 @@ package mq
 
 import (
 	"errors"
+	"log"
 	"sync"
 	"sync/atomic"
 )
@@ -67,10 +68,14 @@ func (p *Partition) Append(msg Message) (int64, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.maxMessage > 0 && len(p.messages) >= p.maxMessage {
+		log.Printf("❌ [PARTITION %s] APPEND FAILED: partition full (capacity=%d, current=%d)", 
+			p.id, p.maxMessage, len(p.messages))
 		return -1, ErrPartitionFull
 	}
 	offset := int64(len(p.messages))
 	p.messages = append(p.messages, msg)
+	log.Printf("✅ [PARTITION %s] MESSAGE APPENDED: offset=%d, key=%s, messages_count=%d", 
+		p.id, offset, msg.Key, len(p.messages))
 	return offset, nil
 }
 
@@ -109,14 +114,18 @@ func (p *Partition) ReadFrom(offset int64, max int) ([]Message, error) {
 	
 	// Validate offset range
 	if offset < 0 {
+		log.Printf("❌ [PARTITION %s] READ FAILED: invalid offset (offset=%d, must be >= 0)", p.id, offset)
 		return []Message{}, ErrOffsetOutOfRange
 	}
 	if offset > tail {
+		log.Printf("❌ [PARTITION %s] READ FAILED: offset out of range (offset=%d, tail=%d)", 
+			p.id, offset, tail)
 		return []Message{}, ErrOffsetOutOfRange
 	}
 	
 	// If reading from tail, return empty slice (no messages available)
 	if offset == tail {
+		log.Printf("📭 [PARTITION %s] READ: no messages available (offset=tail=%d)", p.id, offset)
 		return []Message{}, nil
 	}
 	
@@ -128,6 +137,10 @@ func (p *Partition) ReadFrom(offset int64, max int) ([]Message, error) {
 			end = candidate
 		}
 	}
+	
+	messagesRead := end - start
+	log.Printf("📖 [PARTITION %s] CONSUMED: offset=%d, messages_read=%d, batch_size=%d, tail=%d", 
+		p.id, offset, messagesRead, max, tail)
 	
 	// Return a copy to avoid data races if caller mutates
 	out := make([]Message, end-start)
@@ -141,6 +154,7 @@ func (p *Partition) ReadFrom(offset int64, max int) ([]Message, error) {
 func (p *Partition) Commit(consumer string, offset int64) error {
 	// Validate consumer group name
 	if consumer == "" {
+		log.Printf("❌ [PARTITION %s] COMMIT FAILED: empty consumer group name", p.id)
 		return errors.New("consumer group name cannot be empty")
 	}
 	
@@ -151,22 +165,31 @@ func (p *Partition) Commit(consumer string, offset int64) error {
 	
 	// Validate offset range
 	if offset < 0 {
+		log.Printf("❌ [PARTITION %s] COMMIT FAILED: negative offset (consumer=%s, offset=%d)", 
+			p.id, consumer, offset)
 		return ErrCommitTooLarge
 	}
 	if offset > tail {
+		log.Printf("❌ [PARTITION %s] COMMIT FAILED: offset beyond tail (consumer=%s, offset=%d, tail=%d)", 
+			p.id, consumer, offset, tail)
 		return ErrCommitTooLarge
 	}
 	
 	// try to load existing atomic counter
 	if v, ok := p.offsets.Load(consumer); ok {
 		ai := v.(*atomic.Int64)
+		oldOffset := ai.Load()
 		ai.Store(offset)
+		log.Printf("✅ [PARTITION %s] OFFSET COMMITTED: consumer=%s, old_offset=%d, new_offset=%d, tail=%d", 
+			p.id, consumer, oldOffset, offset, tail)
 		return nil
 	}
 	// create and store a new atomic.Int64
 	ai := new(atomic.Int64)
 	ai.Store(offset)
 	p.offsets.Store(consumer, ai)
+	log.Printf("✅ [PARTITION %s] NEW CONSUMER REGISTERED: consumer=%s, offset=%d, tail=%d", 
+		p.id, consumer, offset, tail)
 	return nil
 }
 
@@ -209,6 +232,7 @@ func (p *Partition) Compact() (int64, error) {
 	defer p.mu.Unlock()
 
 	if len(p.messages) == 0 {
+		log.Printf("🔄 [PARTITION %s] COMPACT: no messages to compact", p.id)
 		return 0, nil
 	}
 
@@ -225,6 +249,7 @@ func (p *Partition) Compact() (int64, error) {
 
 	// If no consumers or all at the beginning, nothing to clean
 	if minOffset == -1 || minOffset <= 0 {
+		log.Printf("🔄 [PARTITION %s] COMPACT: no compactable messages (minOffset=%d)", p.id, minOffset)
 		return 0, nil
 	}
 
@@ -235,10 +260,12 @@ func (p *Partition) Compact() (int64, error) {
 
 	// Nothing to compact if minOffset is 0
 	if minOffset == 0 {
+		log.Printf("🔄 [PARTITION %s] COMPACT: nothing to compact (minOffset=0)", p.id)
 		return 0, nil
 	}
 
 	compactedCount := minOffset
+	beforeCount := len(p.messages)
 
 	// Remove messages up to minOffset
 	p.messages = p.messages[minOffset:]
@@ -246,14 +273,17 @@ func (p *Partition) Compact() (int64, error) {
 	// Adjust all consumer offsets by subtracting the compacted count
 	p.offsets.Range(func(key, value interface{}) bool {
 		ai := value.(*atomic.Int64)
-		currentOffset := ai.Load()
-		newOffset := currentOffset - minOffset
+		oldOffset := ai.Load()
+		newOffset := oldOffset - minOffset
 		if newOffset < 0 {
 			newOffset = 0
 		}
 		ai.Store(newOffset)
 		return true
 	})
+
+	log.Printf("🗑️  [PARTITION %s] COMPACTED: watermark=%d, messages_removed=%d, before=%d, after=%d", 
+		p.id, minOffset, compactedCount, beforeCount, len(p.messages))
 
 	return compactedCount, nil
 }

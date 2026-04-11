@@ -1,4 +1,8 @@
 {
   "listen": ":8080",
-  "partitions": 3
+  "partitions": 3,
+  "partition_capacity": 0,
+  "compaction_enabled": true,
+  "compaction_interval": "1m",
+  "compaction_threshold": 100000
 }

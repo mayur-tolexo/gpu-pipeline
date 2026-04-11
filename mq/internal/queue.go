@@ -3,6 +3,7 @@ package mq
 import (
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -33,11 +34,13 @@ var (
 // CreateTopic creates a topic with given name and partitions. Returns error if topic exists.
 func (q *Queue) CreateTopic(name string, partitions int, partitionCapacity int) error {
 	if name == "" || partitions <= 0 {
+		log.Printf("❌ [QUEUE] CREATE_TOPIC FAILED: invalid args (name=%s, partitions=%d)", name, partitions)
 		return ErrInvalidArg
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if _, ok := q.topics[name]; ok {
+		log.Printf("❌ [QUEUE] CREATE_TOPIC FAILED: topic already exists (name=%s)", name)
 		return ErrTopicExists
 	}
 	// build topic
@@ -58,6 +61,8 @@ func (q *Queue) CreateTopic(name string, partitions int, partitionCapacity int) 
 		return int(h % uint32(len(t.partitions)))
 	}
 	q.topics[name] = t
+	log.Printf("✅ [QUEUE] TOPIC_CREATED: name=%s, partitions=%d, partition_capacity=%d", 
+		name, partitions, cap)
 	return nil
 }
 
@@ -73,27 +78,62 @@ func (q *Queue) GetTopic(name string) (*Topic, error) {
 
 // Publish validates and publishes a message to a topic.
 func (q *Queue) Publish(topic string, msg Message) (int, int64, error) {
-	if msg.Key == "" { return -1, -1, ErrInvalidArg }
+	if msg.Key == "" { 
+		log.Printf("❌ [QUEUE] PUBLISH FAILED: empty message key (topic=%s)", topic)
+		return -1, -1, ErrInvalidArg 
+	}
 	q.mu.RLock()
 	t, ok := q.topics[topic]
 	q.mu.RUnlock()
-	if !ok { return -1, -1, ErrTopicNotFound }
+	if !ok { 
+		log.Printf("❌ [QUEUE] PUBLISH FAILED: topic not found (topic=%s, key=%s)", topic, msg.Key)
+		return -1, -1, ErrTopicNotFound 
+	}
 	idx, off, err := t.Produce(msg)
+	if err != nil {
+		log.Printf("❌ [QUEUE] PUBLISH FAILED: topic produce error (topic=%s, key=%s, error=%v)", 
+			topic, msg.Key, err)
+		return -1, -1, err
+	}
+	log.Printf("📤 [QUEUE] PUBLISHED: topic=%s, partition=%d, offset=%d, key=%s, payload_size=%d", 
+		topic, idx, off, msg.Key, len(msg.Payload))
 	return idx, off, err
 }
 
 // Consume reads messages from a partition. Validates inputs.
 func (q *Queue) Consume(topic string, group string, partition int, batch int) ([]Message, error) {
-	if group == "" { return []Message{}, ErrInvalidArg }
-	if batch <= 0 { return []Message{}, ErrInvalidArg }
+	if group == "" { 
+		log.Printf("❌ [QUEUE] CONSUME FAILED: empty consumer group (topic=%s, partition=%d)", topic, partition)
+		return []Message{}, ErrInvalidArg 
+	}
+	if batch <= 0 { 
+		log.Printf("❌ [QUEUE] CONSUME FAILED: invalid batch size (topic=%s, group=%s, partition=%d, batch=%d)", 
+			topic, group, partition, batch)
+		return []Message{}, ErrInvalidArg 
+	}
 	q.mu.RLock()
 	t, ok := q.topics[topic]
 	q.mu.RUnlock()
-	if !ok { return []Message{}, ErrTopicNotFound }
-	if partition < 0 || partition >= t.Partitions() { return []Message{}, ErrPartitionRange }
+	if !ok { 
+		log.Printf("❌ [QUEUE] CONSUME FAILED: topic not found (topic=%s, group=%s, partition=%d)", 
+			topic, group, partition)
+		return []Message{}, ErrTopicNotFound 
+	}
+	if partition < 0 || partition >= t.Partitions() { 
+		log.Printf("❌ [QUEUE] CONSUME FAILED: partition out of range (topic=%s, group=%s, partition=%d, max_partitions=%d)", 
+			topic, group, partition, t.Partitions())
+		return []Message{}, ErrPartitionRange 
+	}
 	part := t.GetPartition(partition)
 	start := part.Offset(group)
 	msgs, err := part.ReadFrom(start, batch)
+	if err != nil {
+		log.Printf("❌ [QUEUE] CONSUME FAILED: read error (topic=%s, group=%s, partition=%d, offset=%d, error=%v)", 
+			topic, group, partition, start, err)
+		return msgs, err
+	}
+	log.Printf("📥 [QUEUE] PULLED: topic=%s, group=%s, partition=%d, current_offset=%d, messages_returned=%d, batch_size=%d", 
+		topic, group, partition, start, len(msgs), batch)
 	return msgs, err
 }
 
@@ -102,10 +142,26 @@ func (q *Queue) Ack(topic string, group string, partition int, offset int64) err
 	q.mu.RLock()
 	t, ok := q.topics[topic]
 	q.mu.RUnlock()
-	if !ok { return ErrTopicNotFound }
-	if partition < 0 || partition >= t.Partitions() { return ErrPartitionRange }
+	if !ok { 
+		log.Printf("❌ [QUEUE] ACK FAILED: topic not found (topic=%s, group=%s, partition=%d, offset=%d)", 
+			topic, group, partition, offset)
+		return ErrTopicNotFound 
+	}
+	if partition < 0 || partition >= t.Partitions() { 
+		log.Printf("❌ [QUEUE] ACK FAILED: partition out of range (topic=%s, group=%s, partition=%d, max_partitions=%d)", 
+			topic, group, partition, t.Partitions())
+		return ErrPartitionRange 
+	}
 	part := t.GetPartition(partition)
-	return part.Commit(group, offset)
+	err := part.Commit(group, offset)
+	if err != nil {
+		log.Printf("❌ [QUEUE] ACK FAILED: commit error (topic=%s, group=%s, partition=%d, offset=%d, error=%v)", 
+			topic, group, partition, offset, err)
+		return err
+	}
+	log.Printf("✔️  [QUEUE] ACK: topic=%s, group=%s, partition=%d, offset=%d", 
+		topic, group, partition, offset)
+	return nil
 }
 
 // ListTopics returns names (helper)

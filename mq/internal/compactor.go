@@ -154,13 +154,23 @@ func (c *Compactor) compactionLoop() {
 func (c *Compactor) checkAndCompact() {
 	topics := c.queue.ListTopics()
 	if len(topics) == 0 {
+		log.Printf("🔄 [COMPACTOR] CHECK: no topics to compact")
 		return
 	}
 	
+	log.Printf("🔄 [COMPACTOR] CHECKING: %d topics for compaction triggers", len(topics))
+	
+	compactionsPerformed := 0
 	for _, topicName := range topics {
 		if shouldTrigger := c.checkTopicTriggers(topicName); shouldTrigger {
+			log.Printf("🔄 [COMPACTOR] TRIGGER DETECTED: topic=%s, performing compaction", topicName)
 			c.compactTopicWithLogging(topicName)
+			compactionsPerformed++
 		}
+	}
+	
+	if compactionsPerformed == 0 {
+		log.Printf("🔄 [COMPACTOR] CHECK COMPLETE: no thresholds exceeded")
 	}
 }
 
@@ -168,6 +178,7 @@ func (c *Compactor) checkAndCompact() {
 func (c *Compactor) checkTopicTriggers(topicName string) bool {
 	topic, err := c.queue.GetTopic(topicName)
 	if err != nil {
+		log.Printf("❌ [COMPACTOR] TRIGGER_CHECK FAILED: topic not found (topic=%s, error=%v)", topicName, err)
 		return false
 	}
 	
@@ -179,6 +190,8 @@ func (c *Compactor) checkTopicTriggers(topicName string) bool {
 	for i := 0; i < topic.Partitions(); i++ {
 		stats, err := c.queue.GetPartitionStats(topicName, i)
 		if err != nil {
+			log.Printf("⚠️  [COMPACTOR] TRIGGER_CHECK: failed to get stats (topic=%s, partition=%d, error=%v)", 
+				topicName, i, err)
 			continue
 		}
 		
@@ -186,6 +199,8 @@ func (c *Compactor) checkTopicTriggers(topicName string) bool {
 		if thresholdMessages > 0 {
 			msgCount := stats["message_count"].(int)
 			if msgCount > thresholdMessages {
+				log.Printf("⚠️  [COMPACTOR] THRESHOLD_EXCEEDED: message count (topic=%s, partition=%d, count=%d, threshold=%d)", 
+					topicName, i, msgCount, thresholdMessages)
 				return true
 			}
 		}
@@ -193,6 +208,8 @@ func (c *Compactor) checkTopicTriggers(topicName string) bool {
 		// Check compactable message count (if close to being able to free significant space)
 		compactableCount := stats["compactable_count"].(int64)
 		if compactableCount > int64(thresholdMessages/2) {
+			log.Printf("⚠️  [COMPACTOR] THRESHOLD_EXCEEDED: compactable messages (topic=%s, partition=%d, compactable=%d, threshold=%d)", 
+				topicName, i, compactableCount, thresholdMessages/2)
 			return true
 		}
 	}
@@ -202,18 +219,26 @@ func (c *Compactor) checkTopicTriggers(topicName string) bool {
 
 // compactTopicWithLogging compacts a topic and logs the results.
 func (c *Compactor) compactTopicWithLogging(topicName string) {
+	log.Printf("🗑️  [COMPACTOR] STARTING: topic=%s", topicName)
+	
 	results, err := c.queue.CompactTopic(topicName)
 	if err != nil {
-		log.Printf("compaction error for topic %s: %v", topicName, err)
+		log.Printf("❌ [COMPACTOR] ERROR: compaction failed (topic=%s, error=%v)", topicName, err)
 		return
 	}
 	
 	totalCompacted := int64(0)
-	for _, count := range results {
+	for partID, count := range results {
 		totalCompacted += count
+		if count > 0 {
+			log.Printf("   📊 [COMPACTOR] PARTITION_RESULT: partition=%s, messages_removed=%d", partID, count)
+		}
 	}
 	
 	if totalCompacted > 0 {
-		log.Printf("compaction completed for topic %s: %d messages removed", topicName, totalCompacted)
+		log.Printf("✅ [COMPACTOR] COMPLETED: topic=%s, total_messages_removed=%d, partitions_compacted=%d", 
+			topicName, totalCompacted, len(results))
+	} else {
+		log.Printf("🔄 [COMPACTOR] COMPLETED: topic=%s, no messages to compact", topicName)
 	}
 }

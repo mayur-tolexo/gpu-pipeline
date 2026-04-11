@@ -218,13 +218,48 @@ make config
 {
   "listen": ":8080",
   "partitions": 3,
+  "partition_capacity": 0,
   "compaction_enabled": true,
   "compaction_interval": "1m",
   "compaction_threshold": 100000
 }
 ```
 
+**Configuration Parameters**:
+
+- **`listen`**: HTTP server address (default: `:8080`)
+- **`partitions`**: Number of partitions for message distribution (default: 3)
+  - More partitions = more parallelism but higher memory overhead
+  - Recommendation: 3-10 partitions for typical workloads
+  
+- **`partition_capacity`**: Maximum messages per partition (default: 0 = unlimited)
+  - ⚠️ **IMPORTANT**: This is NOT the number of partitions!
+  - `0` (recommended): Unlimited capacity, compaction manages memory
+  - `> 0`: Hard limit, returns error when partition is full
+  - When set to small values (e.g., 3), partition fills up after N messages and rejects new publishes
+  - **Recommendation**: Keep as `0` for production, let compaction manage memory automatically
+
+- **`compaction_enabled`**: Enable/disable automatic compaction (default: true)
+- **`compaction_interval`**: Duration between compaction checks (default: 1m)
+  - Dev: `"1m"` (aggressive cleanup, ~1 MB per partition per minute freed)
+  - Prod: `"5m"` or `"10m"` (less overhead, better throughput)
+- **`compaction_threshold`**: Number of messages to trigger compaction (default: 100,000)
+  - Compaction runs when any partition exceeds this count
+
 Run with config: `./bin/mq-server -config config.json`
+
+### Common Configuration Mistakes
+
+**❌ Mistake: `partition_capacity: 3`**
+```
+Error: partition full (capacity=3, current=3)
+Messages can only be published 3 times before rejection!
+```
+
+**✅ Fix: `partition_capacity: 0`** (unlimited)
+```
+Unlimited messages, compaction automatically frees memory based on consumer lag
+```
 
 ## 📊 Testing & Coverage
 

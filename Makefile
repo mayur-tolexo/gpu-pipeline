@@ -40,7 +40,7 @@ help:
 	@echo "  make streamer-describe      - Show streamer deployment details"
 	@echo ""
 	@echo "API Gateway:"
-	@echo "  make api-gateway-port-forward - Port-forward API Gateway (8081 -> 8000)"
+	@echo "  make api-gateway-port-forward - Port-forward API Gateway (8000 -> 8000)"
 	@echo "  make swagger-ui          - Open Swagger UI in browser (after port-forward)"
 	@echo ""
 	@echo "Helm (Unified for all services):"
@@ -175,11 +175,11 @@ api-gateway-port-forward:
 	@echo "Port-forwarding API Gateway..."
 	@echo "Swagger UI will be available at: http://localhost:8000/swagger/"
 	@echo "API health check: http://localhost:8000/api/v1/health"
-	kubectl port-forward -n $(NAMESPACE) svc/api-gateway-service 8081:8000
+	kubectl port-forward -n $(NAMESPACE) svc/api-gateway-service 8000:8000
 
 swagger-ui:
 	@echo "Opening Swagger UI in browser..."
-	@open http://localhost:8081/swagger/ || xdg-open http://localhost:8081/swagger/ || echo "Please open http://localhost:8081/swagger/ in your browser"
+	@open http://localhost:8000/swagger/ || xdg-open http://localhost:8000/swagger/ || echo "Please open http://localhost:8000/swagger/ in your browser"
 
 # ===== Streamer Storage Management =====
 

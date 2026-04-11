@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -26,6 +27,7 @@ var (
 type Config struct {
 	Listen              string                     `json:"listen"`
 	Partitions          int                        `json:"partitions"`
+	PartitionCapacity   int                        `json:"partition_capacity,omitempty"`
 	CompactionEnabled   bool                       `json:"compaction_enabled,omitempty"`
 	CompactionInterval  string                     `json:"compaction_interval,omitempty"` // e.g., "5m", "30s"
 	CompactionThreshold int                        `json:"compaction_threshold,omitempty"` // message count threshold
@@ -53,6 +55,7 @@ func main() {
 		}
 	}
 	var cfg *Config
+	partitionCapacity := 0 // default: unlimited capacity, managed by compaction
 	if cfgPath != "" {
 		if c, err := loadConfig(cfgPath); err == nil {
 			cfg = c
@@ -62,13 +65,14 @@ func main() {
 			if c.Partitions > 0 {
 				*parts = c.Partitions
 			}
+			partitionCapacity = c.PartitionCapacity // 0 = unlimited (default)
 		} else {
 			log.Printf("warning: failed to load config %s: %v", cfgPath, err)
 		}
 	}
 
-	// initialize queue with default partition capacity
-	q := internalmq.NewQueue(*parts)
+	// initialize queue with configured partition capacity (0 = unlimited, managed by compaction)
+	q := internalmq.NewQueue(partitionCapacity)
 
 	// create a sample default topic for demo
 	if err := q.CreateTopic("default", *parts, 0); err != nil {
@@ -109,7 +113,11 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("starting server on %s (default partitions=%d, compaction=%v)", *addr, *parts, compactorCfg.Enabled)
+		capDisplay := "unlimited"
+		if partitionCapacity > 0 {
+			capDisplay = fmt.Sprintf("%d", partitionCapacity)
+		}
+		log.Printf("starting server on %s (partitions=%d, partition_capacity=%s, compaction=%v)", *addr, *parts, capDisplay, compactorCfg.Enabled)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
