@@ -18,9 +18,6 @@ func (h *GPUHandler) RegisterRoutes(mux *http.ServeMux) {
 	// Telemetry endpoints - handle /api/v1/gpus/{id}/telemetry first (more specific)
 	mux.HandleFunc("GET /api/v1/gpus/", h.handleGPUPath)
 
-	// Query telemetry via POST
-	mux.HandleFunc("POST /api/v1/telemetry/query", h.QueryTelemetry)
-
 	// Swagger UI
 	mux.Handle("/swagger/", httpSwagger.WrapHandler)
 }

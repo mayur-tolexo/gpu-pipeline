@@ -40,13 +40,13 @@ var doc = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/internal.ListGPUsResponse"
+                            "$ref": "#/definitions/models.ListGPUsResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     }
                 }
@@ -87,25 +87,25 @@ var doc = `{
                     "200": {
                         "description": "Telemetry data for GPU",
                         "schema": {
-                            "$ref": "#/definitions/internal.QueryTelemetryResponse"
+                            "$ref": "#/definitions/models.QueryTelemetryResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid time format or missing GPU ID",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "GPU not found",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Database query error",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/models.ErrorResponse"
                         }
                     }
                 }
@@ -133,62 +133,18 @@ var doc = `{
                     }
                 }
             }
-        },
-        "/api/v1/telemetry/query": {
-            "post": {
-                "description": "Get telemetry data for a specific GPU with optional time-range filtering",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Telemetry"
-                ],
-                "summary": "Query telemetry data for a GPU",
-                "parameters": [
-                    {
-                        "description": "Query parameters",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal.QueryTelemetryRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal.QueryTelemetryResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
         }
     },
     "definitions": {
-        "internal.ListGPUsResponse": {
+        "models.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ListGPUsResponse": {
             "type": "object",
             "properties": {
                 "count": {
@@ -202,24 +158,7 @@ var doc = `{
                 }
             }
         },
-        "internal.QueryTelemetryRequest": {
-            "type": "object",
-            "required": [
-                "gpu_id"
-            ],
-            "properties": {
-                "end_time": {
-                    "type": "string"
-                },
-                "gpu_id": {
-                    "type": "string"
-                },
-                "start_time": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal.QueryTelemetryResponse": {
+        "models.QueryTelemetryResponse": {
             "type": "object",
             "properties": {
                 "count": {
@@ -240,7 +179,7 @@ var doc = `{
                 "records": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal.TelemetryResponse"
+                        "$ref": "#/definitions/models.TelemetryResponse"
                     }
                 },
                 "start_time": {
@@ -248,7 +187,7 @@ var doc = `{
                 }
             }
         },
-        "internal.TelemetryResponse": {
+        "models.TelemetryResponse": {
             "type": "object",
             "properties": {
                 "data": {

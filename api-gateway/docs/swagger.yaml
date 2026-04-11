@@ -1,6 +1,11 @@
 basePath: /
 definitions:
-  internal.ListGPUsResponse:
+  models.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  models.ListGPUsResponse:
     properties:
       count:
         type: integer
@@ -9,18 +14,7 @@ definitions:
           type: string
         type: array
     type: object
-  internal.QueryTelemetryRequest:
-    properties:
-      end_time:
-        type: string
-      gpu_id:
-        type: string
-      start_time:
-        type: string
-    required:
-    - gpu_id
-    type: object
-  internal.QueryTelemetryResponse:
+  models.QueryTelemetryResponse:
     properties:
       count:
         type: integer
@@ -34,12 +28,12 @@ definitions:
         type: string
       records:
         items:
-          $ref: '#/definitions/internal.TelemetryResponse'
+          $ref: '#/definitions/models.TelemetryResponse'
         type: array
       start_time:
         type: string
     type: object
-  internal.TelemetryResponse:
+  models.TelemetryResponse:
     properties:
       data:
         additionalProperties: true
@@ -67,11 +61,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/internal.ListGPUsResponse'
+            $ref: '#/definitions/models.ListGPUsResponse'
         "500":
           description: Internal Server Error
           schema:
-            type: string
+            $ref: '#/definitions/models.ErrorResponse'
       summary: List all unique GPUs
       tags:
       - GPUs
@@ -100,19 +94,19 @@ paths:
         "200":
           description: Telemetry data for GPU
           schema:
-            $ref: '#/definitions/internal.QueryTelemetryResponse'
+            $ref: '#/definitions/models.QueryTelemetryResponse'
         "400":
           description: Invalid time format or missing GPU ID
           schema:
-            type: string
+            $ref: '#/definitions/models.ErrorResponse'
         "404":
           description: GPU not found
           schema:
-            type: string
+            $ref: '#/definitions/models.ErrorResponse'
         "500":
           description: Database query error
           schema:
-            type: string
+            $ref: '#/definitions/models.ErrorResponse'
       summary: Get telemetry for a specific GPU
       tags:
       - Telemetry
@@ -131,38 +125,4 @@ paths:
       summary: Health check
       tags:
       - Health
-  /api/v1/telemetry/query:
-    post:
-      consumes:
-      - application/json
-      description: Get telemetry data for a specific GPU with optional time-range filtering
-      parameters:
-      - description: Query parameters
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal.QueryTelemetryRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal.QueryTelemetryResponse'
-        "400":
-          description: Bad Request
-          schema:
-            type: string
-        "404":
-          description: Not Found
-          schema:
-            type: string
-        "500":
-          description: Internal Server Error
-          schema:
-            type: string
-      summary: Query telemetry data for a GPU
-      tags:
-      - Telemetry
 swagger: "2.0"

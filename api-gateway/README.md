@@ -135,7 +135,6 @@ All API endpoints are documented with OpenAPI 3.0 specification via Swagger UI.
 |--------|------|-------------|
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/gpus` | List all GPU IDs |
-| POST | `/api/v1/telemetry/query` | Query telemetry by GPU ID and time range |
 | GET | `/api/v1/gpus/{id}/telemetry` | Get telemetry for specific GPU |
 
 Refer to Swagger UI for complete endpoint documentation, request/response schemas, and interactive testing.

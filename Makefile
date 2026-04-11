@@ -86,8 +86,8 @@ kind-create:
 	@if kind get clusters | grep -q $(KIND_CLUSTER); then \
 		echo "✓ Kind cluster '$(KIND_CLUSTER)' already exists"; \
 	else \
-		echo "Creating Kind cluster '$(KIND_CLUSTER)' with local mounts..."; \
-		kind create cluster --name $(KIND_CLUSTER) --config kind-config.yaml --wait 5m; \
+		echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
+		kind create cluster --name $(KIND_CLUSTER) --wait 5m; \
 		echo "✓ Kind cluster created with hostPath mounts"; \
 		echo ""; \
 		echo "Directory /data will be mounted from your local ./data directory"; \

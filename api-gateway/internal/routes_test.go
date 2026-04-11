@@ -49,26 +49,6 @@ func TestRoutes_ListGPUEndpoint(t *testing.T) {
 	}
 }
 
-// TestRoutes_TelemetryEndpoint tests POST /api/v1/telemetry/query endpoint
-func TestRoutes_TelemetryEndpoint(t *testing.T) {
-	mockService := &MockTelemetryService{}
-
-	handler := NewGPUHandler(mockService)
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	// Create request with empty body (will be invalid)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/telemetry/query", nil)
-	w := httptest.NewRecorder()
-
-	mux.ServeHTTP(w, req)
-
-	// Should get 400 because body is invalid
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", w.Code)
-	}
-}
-
 // TestRoutes_HealthEndpoint tests GET /api/v1/health endpoint
 func TestRoutes_HealthEndpoint(t *testing.T) {
 	mockService := &MockTelemetryService{}
