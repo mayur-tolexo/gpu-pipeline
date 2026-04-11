@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, core-mq-base ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, core-mq-base ]
+    branches: [ main ]
 
 jobs:
   build:
@@ -18,11 +18,31 @@ jobs:
         with:
           go-version: 1.25
 
-      - name: Run tests
-        run: go test ./... -v
+      - name: Run tests with coverage
+        run: go test ./... -v -coverprofile=coverage.out -covermode=atomic
 
-      - name: Build Docker image
+      - name: Display coverage summary
+        run: |
+          echo "Coverage Summary:"
+          go tool cover -func=coverage.out | tail -1
+
+      - name: Build MQ Docker image
         uses: docker/build-push-action@v5
         with:
+          context: ./mq
           push: false
           tags: mq:latest
+
+      - name: Build Streamer Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./streamer
+          push: false
+          tags: streamer:latest
+
+      - name: Build Collector Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./collector
+          push: false
+          tags: collector:latest

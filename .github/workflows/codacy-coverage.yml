@@ -1,0 +1,62 @@
+name: Codacy Coverage Reporter
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  codacy-coverage-reporter:
+    runs-on: ubuntu-latest
+    name: codacy-coverage-reporter
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.25
+      
+      - name: Generate coverage reports
+        run: |
+          # Generate coverage for each service
+          cd mq && go test ./... -coverprofile=../mq-coverage.out -covermode=atomic && cd ..
+          cd streamer && go test ./... -coverprofile=../streamer-coverage.out -covermode=atomic && cd ..
+          cd collector && go test ./... -coverprofile=../collector-coverage.out -covermode=atomic && cd ..
+          
+          # Combine coverage reports
+          echo "mode: atomic" > coverage.out
+          grep -h -v "^mode:" mq-coverage.out streamer-coverage.out collector-coverage.out >> coverage.out
+          
+          # Display combined coverage
+          echo "=== Combined Coverage Report ==="
+          go tool cover -func=coverage.out | tail -1
+      
+      - name: Verify coverage file
+        run: |
+          echo "Coverage file size:"
+          ls -lh coverage.out
+          echo "Coverage file preview:"
+          head -20 coverage.out
+      
+      - name: Upload coverage to Codacy
+        if: env.CODACY_PROJECT_TOKEN != ''
+        uses: codacy/codacy-coverage-reporter-action@v1.3.0
+        with:
+          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          coverage-reports: coverage.out
+          force-coverage-parser: go
+        env:
+          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+      
+      - name: Coverage Upload Status
+        if: always()
+        run: |
+          if [ -z "${{ secrets.CODACY_PROJECT_TOKEN }}" ]; then
+            echo "CODACY_PROJECT_TOKEN secret not set"
+          else
+            echo "CODACY_PROJECT_TOKEN is configured"
+            echo "Coverage file generated: coverage.out"
+          fi

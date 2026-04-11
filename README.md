@@ -2,8 +2,8 @@
 
 > An elastic, scalable telemetry pipeline for GPU clusters using a custom-built message queue (without Kafka/RabbitMQ).
 
-[![Godocs](https://img.shields.io/badge/golang-documentation-blue.svg)](https://pkg.go.dev/github.com/mayur-tolexo/gpu-pipeline)
 [![Go Report Card](https://goreportcard.com/badge/github.com/mayur-tolexo/gpu-pipeline)](https://goreportcard.com/report/github.com/mayur-tolexo/gpu-pipeline)
+[![Codacy Badge](https://app.codacy.com/project/badge/Coverage/15fe9b9c36fb48abb64ee5acc6df4608)](https://app.codacy.com/gh/mayur-tolexo/gpu-pipeline/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_coverage)
 [![Open Source Helpers](https://www.codetriage.com/mayur-tolexo/gpu-pipeline/badges/users.svg)](https://www.codetriage.com/mayur-tolexo/gpu-pipeline)
 [![Release](https://img.shields.io/github/release/mayur-tolexo/gpu-pipeline.svg?style=flat-square)](https://github.com/mayur-tolexo/gpu-pipeline/releases)
 
@@ -195,16 +195,7 @@ cd streamer && make coverage
 cd collector && make coverage
 ```
 
-#### Current Coverage Status
-| Service  | Coverage | Status |
-|----------|----------|--------|
-| MQ       | 85.4%    | ✅     |
-| Streamer | 91.8%    | ✅     |
-| Collector| 80.0%    | ✅     |
-
-All services exceed the 80% coverage target.
-
-### 🚀 Deploy to Kind Cluster (One Command)
+### Deploy to Kind Cluster (One Command)
 
 ```bash
 # Single command: creates Kind cluster, builds all images, loads to Kind, and deploys
