@@ -13,6 +13,7 @@ import (
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/topics", h.handleTopicsRoot)
 	mux.HandleFunc("/topics/", h.handleTopicsSubroutes)
+	mux.HandleFunc("/admin/", h.handleAdminRoutes)
 	mux.HandleFunc("/healthz", h.handleHealth)
 	mux.Handle("/swagger/", httpSwagger.WrapHandler)
 }
@@ -51,6 +52,36 @@ func (h *Handler) handleTopicsSubroutes(w http.ResponseWriter, r *http.Request) 
 		h.HandleConsume(w, r, topic)
 	case "ack":
 		h.HandleAck(w, r, topic)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// handleAdminRoutes routes /admin/...
+func (h *Handler) handleAdminRoutes(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if !strings.HasPrefix(path, "/admin/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	// trim /admin/ prefix
+	rest := path[len("/admin/"):]
+
+	switch {
+	case rest == "compact":
+		h.HandleCompact(w, r)
+	case strings.HasPrefix(rest, "stats/"):
+		// parse /stats/{topic}/{partition}
+		statsPath := rest[len("stats/"):]
+		parts := strings.SplitN(statsPath, "/", 2)
+		if len(parts) != 2 {
+			http.NotFound(w, r)
+			return
+		}
+		topic := parts[0]
+		partition := parts[1]
+		h.HandleGetPartitionStats(w, r, topic, partition)
 	default:
 		http.NotFound(w, r)
 	}

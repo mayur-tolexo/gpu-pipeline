@@ -258,3 +258,125 @@ func (h *Handler) HandleAck(w http.ResponseWriter, r *http.Request, topic string
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "ack received"})
 }
+
+// CompactRequest for POST /admin/compact
+type CompactRequest struct {
+	Topic string `json:"topic"`
+}
+
+// CompactResponse for POST /admin/compact
+type CompactResponse struct {
+	Topic    string            `json:"topic"`
+	Results  map[string]int64  `json:"results"`
+	Message  string            `json:"message"`
+}
+
+// PartitionStats for GET /admin/stats/{topic}/{partition}
+type PartitionStats struct {
+	ID                   string `json:"id"`
+	MessageCount         int    `json:"message_count"`
+	TailOffset           int64  `json:"tail_offset"`
+	MinConsumerOffset    int64  `json:"min_consumer_offset"`
+	CompactableCount     int64  `json:"compactable_count"`
+}
+
+// HandleCompact godoc
+// @Summary Compact a topic
+// @Description Run watermark-based compaction on a topic (removes messages before the minimum committed offset)
+// @Tags admin
+// @Accept json
+// @Produce json
+// @Param request body CompactRequest true "Compact payload"
+// @Success 200 {object} CompactResponse
+// @Failure 400 {string} string
+// @Failure 404 {string} string
+// @Router /admin/compact [post]
+func (h *Handler) HandleCompact(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req CompactRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	if req.Topic == "" {
+		http.Error(w, "topic is required", http.StatusBadRequest)
+		return
+	}
+
+	results, err := h.Queue.CompactTopic(req.Topic)
+	if err != nil {
+		if err == internalmq.ErrTopicNotFound {
+			http.Error(w, "topic not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	totalCompacted := int64(0)
+	for _, count := range results {
+		totalCompacted += count
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(CompactResponse{
+		Topic:   req.Topic,
+		Results: results,
+		Message: "compaction completed, " + strconv.FormatInt(totalCompacted, 10) + " messages removed",
+	})
+}
+
+// HandleGetPartitionStats godoc
+// @Summary Get partition statistics
+// @Description Get statistics for a topic partition (message count, offsets, watermark)
+// @Tags admin
+// @Produce json
+// @Param topic path string true "Topic name"
+// @Param partition path int true "Partition ID"
+// @Success 200 {object} PartitionStats
+// @Failure 400 {string} string
+// @Failure 404 {string} string
+// @Router /admin/stats/{topic}/{partition} [get]
+func (h *Handler) HandleGetPartitionStats(w http.ResponseWriter, r *http.Request, topic string, partStr string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	partition, err := strconv.Atoi(partStr)
+	if err != nil {
+		http.Error(w, "invalid partition", http.StatusBadRequest)
+		return
+	}
+
+	stats, err := h.Queue.GetPartitionStats(topic, partition)
+	if err != nil {
+		if err == internalmq.ErrTopicNotFound {
+			http.Error(w, "topic not found", http.StatusNotFound)
+		} else if err == internalmq.ErrPartitionRange {
+			http.Error(w, "partition out of range", http.StatusBadRequest)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	response := PartitionStats{
+		ID:                stats["id"].(string),
+		MessageCount:      stats["message_count"].(int),
+		TailOffset:        stats["tail_offset"].(int64),
+		MinConsumerOffset: stats["min_consumer_offset"].(int64),
+		CompactableCount:  stats["compactable_count"].(int64),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+

@@ -2,6 +2,11 @@
 
 > An elastic, scalable telemetry pipeline for GPU clusters using a custom-built message queue (without Kafka/RabbitMQ).
 
+[![Godocs](https://img.shields.io/badge/golang-documentation-blue.svg)](https://pkg.go.dev/github.com/mayur-tolexo/gpu-pipeline)
+[![Go Report Card](https://goreportcard.com/badge/github.com/mayur-tolexo/gpu-pipeline)](https://goreportcard.com/report/github.com/mayur-tolexo/gpu-pipeline)
+[![Open Source Helpers](https://www.codetriage.com/mayur-tolexo/gpu-pipeline/badges/users.svg)](https://www.codetriage.com/mayur-tolexo/gpu-pipeline)
+[![Release](https://img.shields.io/github/release/mayur-tolexo/gpu-pipeline.svg?style=flat-square)](https://github.com/mayur-tolexo/gpu-pipeline/releases)
+
 **Status**: ✅ Production Ready | **Architecture**: Microservices | **Deployment**: Kubernetes + Helm
 
 ---

@@ -117,6 +117,61 @@ func (q *Queue) ListTopics() []string {
 	return out
 }
 
+// CompactTopic compacts all partitions in a topic using watermark-based cleanup.
+// It removes messages that have been consumed by all consumer groups in that topic.
+// Returns a map of partition IDs to the number of messages compacted, and any error.
+func (q *Queue) CompactTopic(topicName string) (map[string]int64, error) {
+	q.mu.RLock()
+	t, ok := q.topics[topicName]
+	q.mu.RUnlock()
+	if !ok {
+		return nil, ErrTopicNotFound
+	}
+
+	results := make(map[string]int64)
+	for i := 0; i < t.Partitions(); i++ {
+		part := t.GetPartition(i)
+		if part == nil {
+			continue
+		}
+		compacted, err := part.Compact()
+		if err != nil {
+			return results, err
+		}
+		results[part.ID()] = compacted
+	}
+	return results, nil
+}
+
+// GetPartitionStats returns statistics for a partition (useful for monitoring).
+// This includes: number of messages, tail offset, min consumer offset (watermark).
+func (q *Queue) GetPartitionStats(topicName string, partitionIdx int) (map[string]interface{}, error) {
+	q.mu.RLock()
+	t, ok := q.topics[topicName]
+	q.mu.RUnlock()
+	if !ok {
+		return nil, ErrTopicNotFound
+	}
+
+	if partitionIdx < 0 || partitionIdx >= t.Partitions() {
+		return nil, ErrPartitionRange
+	}
+
+	part := t.GetPartition(partitionIdx)
+	if part == nil {
+		return nil, errors.New("partition not found")
+	}
+
+	stats := map[string]interface{}{
+		"id":              part.ID(),
+		"message_count":   part.Len(),
+		"tail_offset":     part.TailOffset(),
+		"min_consumer_offset": part.GetMinConsumerOffset(),
+		"compactable_count": part.GetMinConsumerOffset(),
+	}
+	return stats, nil
+}
+
 // helper: consistent fnv32
 func fnv32(s string) uint32 {
 	var h uint32 = 2166136261

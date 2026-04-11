@@ -24,8 +24,11 @@ var (
 
 // Config represents runtime configuration for the server (can be provided via file).
 type Config struct {
-	Listen     string `json:"listen"`
-	Partitions int    `json:"partitions"`
+	Listen              string                     `json:"listen"`
+	Partitions          int                        `json:"partitions"`
+	CompactionEnabled   bool                       `json:"compaction_enabled,omitempty"`
+	CompactionInterval  string                     `json:"compaction_interval,omitempty"` // e.g., "5m", "30s"
+	CompactionThreshold int                        `json:"compaction_threshold,omitempty"` // message count threshold
 }
 
 func loadConfig(path string) (*Config, error) {
@@ -49,8 +52,10 @@ func main() {
 			cfgPath = ev
 		}
 	}
+	var cfg *Config
 	if cfgPath != "" {
 		if c, err := loadConfig(cfgPath); err == nil {
+			cfg = c
 			if c.Listen != "" {
 				*addr = c.Listen
 			}
@@ -70,6 +75,26 @@ func main() {
 		log.Printf("warning: create default topic: %v", err)
 	}
 
+	// setup automatic compaction scheduler
+	compactorCfg := internalmq.DefaultCompactorConfig()
+	if cfg != nil {
+		if !cfg.CompactionEnabled {
+			compactorCfg.Enabled = false
+		}
+		if cfg.CompactionInterval != "" {
+			if dur, err := time.ParseDuration(cfg.CompactionInterval); err == nil {
+				compactorCfg.Interval = dur
+			} else {
+				log.Printf("warning: invalid compaction interval %q: %v", cfg.CompactionInterval, err)
+			}
+		}
+		if cfg.CompactionThreshold > 0 {
+			compactorCfg.ThresholdMessages = cfg.CompactionThreshold
+		}
+	}
+	compactor := internalmq.NewCompactor(q, compactorCfg)
+	compactor.Start()
+
 	// setup API handler and routes
 	apiHandler := apimux.NewHandler(q)
 	mux := http.NewServeMux()
@@ -84,7 +109,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("starting server on %s (default partitions=%d)", *addr, *parts)
+		log.Printf("starting server on %s (default partitions=%d, compaction=%v)", *addr, *parts, compactorCfg.Enabled)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server error: %v", err)
 		}
@@ -94,6 +119,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 	log.Println("shutting down...")
+	compactor.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
