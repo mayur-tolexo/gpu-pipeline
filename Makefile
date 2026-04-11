@@ -5,7 +5,8 @@ REGISTRY=localhost:5000
 # ===== Development/Local Commands =====
 
 .PHONY: help kind-create kind-delete docker-build-all docker-load-all build-all test coverage \
-	deploy deploy-all verify logs logs-all cleanup watch kind-full helm-install helm-uninstall
+	deploy deploy-all verify logs logs-all cleanup watch kind-full helm-install helm-uninstall \
+	api-gateway-port-forward swagger-ui
 
 help:
 	@echo "GPU Pipeline - Available Commands"
@@ -31,6 +32,10 @@ help:
 	@echo "  make logs-all           - Show all service logs"
 	@echo "  make watch              - Watch all pods"
 	@echo ""
+	@echo "API Gateway:"
+	@echo "  make api-gateway-port-forward - Port-forward API Gateway (8000 -> 8000)"
+	@echo "  make swagger-ui          - Open Swagger UI in browser (after port-forward)"
+	@echo ""
 	@echo "Helm:"
 	@echo "  make helm-install       - Install via Helm"
 	@echo "  make helm-uninstall     - Uninstall Helm release"
@@ -46,6 +51,7 @@ build-all:
 	cd mq && make build
 	cd streamer && make build
 	cd collector && make build
+	cd api-gateway && make build
 	@echo "✓ All services built"
 
 test:
@@ -53,6 +59,7 @@ test:
 	cd mq && make test
 	cd streamer && make test
 	cd collector && make test
+	cd api-gateway && make test
 
 coverage:
 	@echo "Test coverage by service:"
@@ -62,6 +69,8 @@ coverage:
 	cd streamer && make coverage || true
 	@echo "\n=== Collector ==="
 	cd collector && make coverage || true
+	@echo "\n=== API Gateway ==="
+	cd api-gateway && make coverage || true
 
 # ===== Kind Cluster Commands =====
 
@@ -86,6 +95,7 @@ docker-build-all: build-all
 	cd mq && make docker
 	cd streamer && make docker
 	cd collector && make docker
+	cd api-gateway && make docker-build
 	@echo "✓ All Docker images built"
 
 docker-load-all: docker-build-all
@@ -93,6 +103,7 @@ docker-load-all: docker-build-all
 	kind load docker-image mq-server:latest --name $(KIND_CLUSTER)
 	kind load docker-image streamer:latest --name $(KIND_CLUSTER)
 	kind load docker-image collector:latest --name $(KIND_CLUSTER)
+	kind load docker-image gpu-pipeline/api-gateway:latest --name $(KIND_CLUSTER)
 	@echo "✓ All images loaded into Kind cluster"
 
 # ===== Kubernetes Deployment =====
@@ -108,11 +119,14 @@ deploy-all:
 	kubectl apply -n $(NAMESPACE) -f deployment/k8s/job-topic.yaml
 	kubectl apply -n $(NAMESPACE) -f deployment/k8s/collector.yaml
 	kubectl apply -n $(NAMESPACE) -f deployment/k8s/streamer.yaml
+	kubectl apply -n $(NAMESPACE) -f deployment/k8s/api-gateway.yaml
+	kubectl apply -n $(NAMESPACE) -f deployment/k8s/api-gateway-service.yaml
 	@echo "✓ All services deployed"
 	@echo "Waiting for deployments to be ready..."
 	kubectl wait --for=condition=available --timeout=300s deployment/mq -n $(NAMESPACE) || true
 	kubectl wait --for=condition=available --timeout=300s deployment/collector -n $(NAMESPACE) || true
 	kubectl wait --for=condition=available --timeout=300s deployment/streamer -n $(NAMESPACE) || true
+	kubectl wait --for=condition=available --timeout=300s deployment/api-gateway -n $(NAMESPACE) || true
 	@echo "✓ Deployments ready"
 
 verify:
@@ -138,9 +152,23 @@ logs-all:
 	kubectl logs -n $(NAMESPACE) -l app=collector --tail=20 || echo "No Collector logs"
 	@echo "\n=== Streamer ==="
 	kubectl logs -n $(NAMESPACE) -l app=streamer --tail=20 || echo "No Streamer logs"
+	@echo "\n=== API Gateway ==="
+	kubectl logs -n $(NAMESPACE) -l app=api-gateway --tail=20 || echo "No API Gateway logs"
 
 watch:
 	kubectl get pods -n $(NAMESPACE) -w
+
+# ===== API Gateway =====
+
+api-gateway-port-forward:
+	@echo "Port-forwarding API Gateway..."
+	@echo "Swagger UI will be available at: http://localhost:8000/swagger/"
+	@echo "API health check: http://localhost:8000/api/v1/health"
+	kubectl port-forward -n $(NAMESPACE) svc/api-gateway-service 8000:8000
+
+swagger-ui:
+	@echo "Opening Swagger UI in browser..."
+	@open http://localhost:8000/swagger/ || xdg-open http://localhost:8000/swagger/ || echo "Please open http://localhost:8000/swagger/ in your browser"
 
 # ===== Helm =====
 

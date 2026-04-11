@@ -18,10 +18,11 @@
 3. [Architecture](#architecture)
 4. [Services](#services)
 5. [Build & Test](#build--test)
-6. [Deployment](#deployment)
-7. [Commands Reference](#commands-reference)
-8. [Project Status](#project-status)
-9. [Tech Stack](#tech-stack)
+6. [Access Swagger UI](#-access-swagger-ui-customer-facing-api)
+7. [Deployment](#deployment)
+8. [Commands Reference](#commands-reference)
+9. [Project Status](#project-status)
+10. [Tech Stack](#tech-stack)
 
 ---
 
@@ -60,7 +61,7 @@ make test
 make coverage
 
 # Verify binaries
-ls -la mq/bin/ collector/bin/ streamer/bin/
+ls -la mq/bin/ collector/bin/ streamer/bin/ api-gateway/bin/
 ```
 
 ### Option 2: Docker & Kubernetes (Full Stack)
@@ -77,6 +78,10 @@ make watch
 # View logs
 make logs-all
 
+# Access Swagger UI (in another terminal)
+make api-gateway-port-forward  # In one terminal (keeps running)
+make swagger-ui                 # In another terminal (opens browser)
+
 # Clean up
 make cleanup
 ```
@@ -88,21 +93,28 @@ make cleanup
 The system is composed of independently deployable services:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│              GPU Pipeline Architecture                  │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌──────────────┐      ┌────────────┐    ┌──────────┐ │
-│  │  Streamer    │─────►│  MQ Queue  │───►│ Collector│ │
-│  │  (Producer)  │      │(Partitioned)    │(Consumer)│ │
-│  └──────────────┘      └────────────┘    └────┬─────┘ │
-│                                                │       │
-│                                           ┌────▼─────┐ │
-│                                           │PostgreSQL│ │
-│                                           │(Storage) │ │
-│                                           └──────────┘ │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│              GPU Pipeline Architecture                   │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌──────────────┐      ┌────────────┐    ┌──────────┐  │
+│  │  Streamer    │─────►│  MQ Queue  │───►│Collector │  │
+│  │ (Producer)   │      │(Partitioned)    │(Consumer)│  │
+│  └──────────────┘      └────────────┘    └────┬─────┘  │
+│                                                │        │
+│                                           ┌────▼─────┐  │
+│                                           │PostgreSQL│  │
+│                                           │(Storage) │  │
+│                                           └────┬─────┘  │
+│                                                │        │
+│                                     ┌──────────▼────┐   │
+│                                     │  API Gateway  │   │
+│                                     │  (Port 8000)  │   │
+│                                     │ Swagger UI /  │   │
+│                                     │ Query API     │   │
+│                                     └───────────────┘   │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -143,7 +155,20 @@ The system is composed of independently deployable services:
   - Batch processing with configurable poll interval
   - Graceful error handling and recovery
 
-### 🗄️ PostgreSQL
+### � API Gateway
+- **Binary**: `./api-gateway/bin/api-gateway`
+- **Role**: REST API for querying GPU telemetry from PostgreSQL
+- **Status**: ✅ Complete
+- **Test Coverage**: 80%+
+- **Features**:
+  - OpenAPI 3.0 / Swagger UI documentation
+  - List GPUs endpoint
+  - Query telemetry with time-range filtering
+  - Health check endpoint
+  - HTTP server on `:8000`
+  - Multi-stage Docker build (minimal alpine image)
+
+### �🗄️ PostgreSQL
 - **Version**: 15-Alpine
 - **Role**: Central data store for telemetry
 - **Storage**: Persistent volume
@@ -163,12 +188,14 @@ Binary locations:
 - MQ: `mq/bin/mq-server`
 - Streamer: `streamer/bin/streamer`
 - Collector: `collector/bin/collector`
+- API Gateway: `api-gateway/bin/api-gateway`
 
 Or build individual services:
 ```bash
 cd mq && make build
 cd streamer && make build
 cd collector && make build
+cd api-gateway && make build
 ```
 
 ### Running Tests
@@ -229,6 +256,49 @@ collector-xxxxx          1/1     Running   0
 collector-xxxxx          1/1     Running   0
 streamer-xxxxx           1/1     Running   0
 streamer-xxxxx           1/1     Running   0
+api-gateway-xxxxx        1/1     Running   0
+```
+
+---
+
+## 🌐 Access Swagger UI (Customer-Facing API)
+
+After deployment, expose the API Gateway Swagger UI to customers:
+
+### Local Development (Port-Forward)
+```bash
+# Terminal 1: Port-forward the API Gateway
+make api-gateway-port-forward
+
+# Terminal 2: Open Swagger UI in browser
+make swagger-ui
+
+# Or manually visit: http://localhost:8000/swagger/
+```
+
+### API Endpoints
+- **Swagger UI**: `http://localhost:8000/swagger/`
+- **Health Check**: `http://localhost:8000/api/v1/health`
+- **List GPUs**: `GET http://localhost:8000/api/v1/gpus`
+- **Query Telemetry**: `POST http://localhost:8000/api/v1/telemetry/query`
+
+### Example Requests
+```bash
+# Get all GPUs
+curl -X GET http://localhost:8000/api/v1/gpus \
+  -H "Content-Type: application/json"
+
+# Query telemetry for a specific GPU
+curl -X POST http://localhost:8000/api/v1/telemetry/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gpu_id": "gpu-001",
+    "start_time": "2026-04-11T00:00:00Z",
+    "end_time": "2026-04-12T00:00:00Z"
+  }'
+
+# Health check
+curl -X GET http://localhost:8000/api/v1/health
 ```
 
 ---
@@ -252,6 +322,10 @@ make verify                 # Verify all services
 make watch                  # Watch pods in real-time
 make logs                   # Show collector logs
 make logs-all               # Show all service logs
+
+# API Gateway
+make api-gateway-port-forward  # Port-forward API Gateway (8000:8000)
+make swagger-ui                 # Open Swagger UI in browser
 
 # Helm
 make helm-install           # Install via Helm
@@ -598,17 +672,22 @@ make deploy
 - [x] Unique constraint for idempotency
 - [x] pgbouncer-compatible connection pooling
 
-### Phase 7: API Gateway ⏳
-- [ ] List GPUs endpoint
-- [ ] Query telemetry endpoint
-- [ ] Time-range filtering
-- [ ] OpenAPI auto-generation
+### Phase 7: API Gateway ✅
+- [x] List GPUs endpoint
+- [x] Query telemetry endpoint
+- [x] Time-range filtering
+- [x] OpenAPI auto-generation / Swagger UI
+- [x] 80%+ test coverage
+- [x] Multi-stage Docker build
+- [x] Kubernetes deployment
+- [x] Swagger UI port-forward for customer access
 
 ### Phase 8: Deployment ✅
 - [x] Dockerfiles for all services
-- [x] Kubernetes deployment configs
-- [x] Helm charts
+- [x] Kubernetes deployment configs (including API Gateway)
+- [x] Helm charts (including API Gateway)
 - [x] Make targets for deployment
+- [x] API Gateway Swagger UI exposure
 - [ ] Horizontal pod autoscaling
 - [ ] StatefulSet for PostgreSQL HA
 
