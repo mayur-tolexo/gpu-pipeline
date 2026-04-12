@@ -223,10 +223,12 @@ func (h *Handler) HandleConsume(w http.ResponseWriter, r *http.Request, topic st
 	// build response with offsets
 	msgResp := make([]MessageResponse, 0, len(msgs))
 	t, _ := h.Queue.GetTopic(topic)
+	var startOffset int64
+	nextOffset := int64(0)
 	if t != nil {
 		part := t.GetPartition(partition)
 		if part != nil {
-			startOffset := part.Offset(group)
+			startOffset = part.Offset(group)
 			for i, m := range msgs {
 				msgResp = append(msgResp, MessageResponse{
 					Offset:  startOffset + int64(i),
@@ -234,17 +236,19 @@ func (h *Handler) HandleConsume(w http.ResponseWriter, r *http.Request, topic st
 					Payload: string(m.Payload),
 				})
 			}
+			// Calculate absolute next offset for consumer to ack with
+			nextOffset = startOffset + int64(len(msgs))
 		}
 	}
 
-	log.Printf("✅ [API] PULLED: topic=%s, group=%s, partition=%d, messages_returned=%d, batch=%d", 
-		topic, group, partition, len(msgs), batch)
+	log.Printf("✅ [API] PULLED: topic=%s, group=%s, partition=%d, messages_returned=%d, batch=%d, start_offset=%d, next_offset=%d", 
+		topic, group, partition, len(msgs), batch, startOffset, nextOffset)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ConsumeResponse{
 		Messages:   msgResp,
-		NextOffset: int64(len(msgs)),
+		NextOffset: nextOffset,
 	})
 }
 
