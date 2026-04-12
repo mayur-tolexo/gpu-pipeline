@@ -24,6 +24,14 @@ mq:
   image: mq-server:latest
   replicas: 1
   port: 8080
+  # MQ Server Configuration
+  config:
+    listen: ":8080"
+    partitions: 3
+    partition_capacity: 0           # 0 = unlimited (managed by compaction), > 0 = hard limit
+    compaction_enabled: true
+    compaction_interval: "1m"       # Dev: "1m", Prod: "5m" or "10m"
+    compaction_threshold: 100000    # Message count threshold for compaction
   resources:
     requests:
       memory: "128Mi"
