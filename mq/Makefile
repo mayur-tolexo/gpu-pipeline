@@ -32,7 +32,7 @@ run: build
 	./bin/$(BINARY) -config $(CONFIG)
 
 config:
-	@echo '{"listen":":8080","partitions":3}' > $(CONFIG) && echo "wrote $(CONFIG)"
+	@echo '{"listen":":8080","partitions":3,"partition_capacity":0,"compaction_enabled":true,"compaction_interval":"1m","compaction_threshold":100000}' > $(CONFIG) && echo "wrote $(CONFIG)"
 
 clean:
 	rm -f bin/$(BINARY) $(CONFIG) docs/

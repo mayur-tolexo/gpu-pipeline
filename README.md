@@ -1394,18 +1394,6 @@ make deploy
 
 ---
 
-## Detailed Documentation
-
-- **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** - Complete deployment instructions, troubleshooting, and operations guide
-  - Step-by-step deployment process
-  - ConfigMap setup and telemetry data management
-  - Service access and API examples
-  - Helm deployment instructions
-  - Troubleshooting common issues
-  - Monitoring and updating services
-
----
-
 ## Future Improvements
 
 - Disk-backed persistence (WAL)

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mq-config
+  namespace: gpu-pipeline
+  labels:
+    app: mq
+data:
+  config.json: |
+    {
+      "listen": ":8080",
+      "partitions": 3,
+      "partition_capacity": 0,
+      "compaction_enabled": true,
+      "compaction_interval": "5m",
+      "compaction_threshold": 1000
+    }

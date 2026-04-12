@@ -125,6 +125,7 @@ deploy-all:
 	@echo "Deploying all services to namespace $(NAMESPACE)..."
 	kubectl apply -f deployment/k8s/namespace.yaml
 	kubectl apply -n $(NAMESPACE) -f deployment/k8s/postgres.yaml
+	kubectl apply -n $(NAMESPACE) -f deployment/k8s/mq-config.yaml
 	kubectl apply -n $(NAMESPACE) -f deployment/k8s/mq.yaml
 	kubectl apply -n $(NAMESPACE) -f deployment/k8s/mq-service.yaml
 	kubectl apply -n $(NAMESPACE) -f deployment/k8s/job-topic.yaml
