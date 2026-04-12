@@ -1,0 +1,57 @@
+name: Helm Chart Release
+
+on:
+  push:
+    tags:
+      - 'release-*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    env:
+      CHART_PATH: helm/gpu-pipeline
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Extract version
+        id: vars
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#release-}
+
+          echo "VERSION=$VERSION"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid tag format. Use release-x.y.z"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Lint chart
+        run: |
+          helm lint $CHART_PATH
+
+      - name: Package chart
+        run: |
+          mkdir -p packaged
+
+          helm package $CHART_PATH \
+            --version ${{ steps.vars.outputs.version }} \
+            --app-version ${{ steps.vars.outputs.version }} \
+            -d packaged
+
+      - name: Create GitHub Release + Upload Chart
+        uses: softprops/action-gh-release@v2
+        with:
+          name: gpu-pipeline-${{ steps.vars.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          files: packaged/*.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
