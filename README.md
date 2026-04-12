@@ -106,28 +106,28 @@ make cleanup
 The system is composed of independently deployable services:
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│              GPU Pipeline Architecture                   │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────┐      ┌────────────┐    ┌──────────┐  │
-│  │  Streamer    │─────►│  MQ Queue  │───►│Collector │  │
-│  │ (Producer)   │      │(Partitioned)    │(Consumer)│  │
-│  └──────────────┘      └────────────┘    └────┬─────┘  │
-│                                                │        │
-│                                           ┌────▼─────┐  │
-│                                           │PostgreSQL│  │
-│                                           │(Storage) │  │
-│                                           └────┬─────┘  │
-│                                                │        │
-│                                     ┌──────────▼────┐   │
-│                                     │  API Gateway  │   │
-│                                     │  (Port 8000)  │   │
-│                                     │ Swagger UI /  │   │
-│                                     │ Query API     │   │
-│                                     └───────────────┘   │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│              GPU Pipeline Architecture                         │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  ┌──────────────┐      ┌────────────┐    ┌──────────┐          │
+│  │  Streamer    │─────►│  MQ Queue  │───►│Collector │          │
+│  │ (Producer)   │      │(Partitioned)    │(Consumer)│          │
+│  └──────────────┘      └────────────┘    └────┬─────┘          │
+│                                                │               │
+│                                           ┌────▼─────┐         │
+│                                           │PostgreSQL│         │
+│                                           │(Storage) │         │
+│                                           └────┬─────┘         │
+│                                                │               │
+│                                         ┌──────▼────────┐      │
+│                                         │  API Gateway  │      │
+│                                         │  (Port 8000)  │      │
+│                                         │ Swagger UI /  │      │
+│                                         │ Query API     │      │
+│                                         └───────────────┘      │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -630,31 +630,20 @@ make swagger-ui
 # Or manually visit: http://localhost:8000/swagger/
 ```
 
-### API Endpoints
+### API Endpoints (GET Only)
 - **Swagger UI**: `http://localhost:8000/swagger/`
-- **Health Check**: `http://localhost:8000/api/v1/health`
-- **List GPUs**: `GET http://localhost:8000/api/v1/gpus`
-- **Query Telemetry**: `POST http://localhost:8000/api/v1/telemetry/query`
+- **Health Check**: `GET /api/v1/health`
+- **List GPUs**: `GET /api/v1/gpus`
+- **Get GPU Telemetry**: `GET /api/v1/gpus/{gpu_id}/telemetry?start_time=...&end_time=...`
 
 ### Example Requests
 
 ```bash
 # Get all GPUs
-curl -X GET http://localhost:8000/api/v1/gpus \
-  -H "Content-Type: application/json"
+curl -X GET http://localhost:8000/api/v1/gpus
 
-# Query telemetry for a specific GPU with time range
-curl -X POST http://localhost:8000/api/v1/telemetry/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "gpu_id": "gpu-001",
-    "start_time": "2026-04-11T00:00:00Z",
-    "end_time": "2026-04-12T00:00:00Z"
-  }'
-
-# Get telemetry for specific GPU
-curl -X GET "http://localhost:8000/api/v1/gpus/gpu-001/telemetry?start_time=2026-04-11T00:00:00Z&end_time=2026-04-12T00:00:00Z" \
-  -H "Content-Type: application/json"
+# Get telemetry for specific GPU with time range
+curl -X GET "http://localhost:8000/api/v1/gpus/gpu-001/telemetry?start_time=2026-04-11T00:00:00Z&end_time=2026-04-12T00:00:00Z"
 
 # Health check
 curl -X GET http://localhost:8000/api/v1/health
@@ -738,202 +727,6 @@ make kind-full              # Full reset (delete cluster + redeploy)
 
 # Help
 make help                   # Show all available commands
-```
-
----
-
-## Services
-
-### 📡 Telemetry Streamer
-- **Binary**: `./streamer/bin/streamer`
-- **Role**: Streams CSV telemetry data to MQ
-- **Status**: ✅ Complete
-- **Test Coverage**: 91.8%
-- **Features**:
-  - CSV streaming with configurable intervals
-  - Graceful shutdown with context cancellation
-  - Publisher interface for dependency injection
-  - 4 flexible storage modes (embedded, hostPath, RWX, remote)
-- **📚 Detailed Documentation**: See [streamer/README.md](./streamer/README.md)
-
-### 📨 Custom Message Queue (MQ)
-- **Binary**: `./mq/bin/mq-server`
-- **Role**: Partitioned, pull-based messaging system
-- **Status**: ✅ Complete
-- **Test Coverage**: 85.4% (internal)
-- **Features**:
-  - At-least-once delivery semantics
-  - Consumer groups with offset tracking
-  - Partition-based scalability and ordering
-  - REST API endpoints
-  - HTTP server on `:8080`
-  - **Watermark-based automatic compaction** for memory management
-- **📚 Detailed Documentation**: See [mq/README.md](./mq/README.md)
-  - [Architecture Overview](./mq/README.md#-architecture) - Layered design and message flow
-  - [HTTP API Reference](./mq/README.md#-http-api) - Complete API endpoints
-  - [Concurrency & Performance](./mq/README.md#-concurrency--performance) - Design details
-  - [Memory Management](./mq/README.md#key-features) - Compaction strategy
-
-### 💾 Telemetry Collector
-- **Binary**: `./collector/bin/collector`
-- **Role**: Consumes messages from MQ, stores in PostgreSQL
-- **Status**: ✅ Complete
-- **Test Coverage**: 80.0%
-- **Features**:
-  - Singleton GORM connection with pgbouncer support
-  - Idempotent writes with unique constraint (gpu_id, timestamp)
-  - Batch processing with configurable poll interval
-  - Graceful error handling and recovery
-- **📚 Detailed Documentation**: See [collector/README.md](./collector/README.md)
-  - [Design & Architecture](./collector/README.md#design--architecture) - Poll-based consumption and batching
-  - [Database Schema](./collector/README.md#database) - Telemetry table structure and indexing
-  - [Production Deployment](./collector/README.md#production-checklist) - Pre-deployment checklist
-  - [Configuration](./collector/README.md#configuration) - Environment variables and tuning
-
-### � API Gateway
-- **Binary**: `./api-gateway/bin/api-gateway`
-- **Role**: REST API for querying GPU telemetry from PostgreSQL
-- **Status**: ✅ Complete
-- **Test Coverage**: 80%+
-- **Features**:
-  - OpenAPI 3.0 / Swagger UI documentation
-  - List GPUs endpoint
-  - Query telemetry with time-range filtering
-  - Health check endpoint
-  - HTTP server on `:8000`
-  - Multi-stage Docker build (minimal alpine image)
-
-### �🗄️ PostgreSQL
-- **Version**: 15-Alpine
-- **Role**: Central data store for telemetry
-- **Storage**: Persistent volume
-
----
-
-## Build & Test
-
-### Building Services
-
-From root directory, build all services:
-```bash
-make build-all
-```
-
-Binary locations:
-- MQ: `mq/bin/mq-server`
-- Streamer: `streamer/bin/streamer`
-- Collector: `collector/bin/collector`
-- API Gateway: `api-gateway/bin/api-gateway`
-
-Or build individual services:
-```bash
-cd mq && make build
-cd streamer && make build
-cd collector && make build
-cd api-gateway && make build
-```
-
-### Running Tests
-
-```bash
-# Test all services
-make test
-
-# Test individual service
-cd mq && make test
-cd streamer && make test
-cd collector && make test
-```
-
-### Test Coverage
-
-```bash
-# View coverage for all services
-make coverage
-
-# View coverage for individual service
-cd mq && make coverage
-cd streamer && make coverage
-cd collector && make coverage
-```
-
-### Deploy to Kind Cluster (One Command)
-
-```bash
-# Single command: creates Kind cluster, builds all images, loads to Kind, and deploys
-make deploy
-
-# Monitor deployment
-make verify
-make logs-all
-make watch
-```
-
-### 📊 Verify Services
-
-```bash
-# Check all services are running
-kubectl get pods -n gpu-pipeline
-
-# Check services
-kubectl get svc -n gpu-pipeline
-
-# View logs
-make logs-all
-```
-
-Expected output:
-```
-NAME                     READY   STATUS    RESTARTS
-postgres-xxxxx           1/1     Running   0
-mq-xxxxx                 1/1     Running   0
-collector-xxxxx          1/1     Running   0
-collector-xxxxx          1/1     Running   0
-streamer-xxxxx           1/1     Running   0
-streamer-xxxxx           1/1     Running   0
-api-gateway-xxxxx        1/1     Running   0
-```
-
----
-
-## 🌐 Access Swagger UI (Customer-Facing API)
-
-After deployment, expose the API Gateway Swagger UI to customers:
-
-### Local Development (Port-Forward)
-```bash
-# Terminal 1: Port-forward the API Gateway
-make api-gateway-port-forward
-
-# Terminal 2: Open Swagger UI in browser
-make swagger-ui
-
-# Or manually visit: http://localhost:8081/swagger/
-```
-
-### API Endpoints
-- **Swagger UI**: `http://localhost:8000/swagger/`
-- **Health Check**: `http://localhost:8000/api/v1/health`
-- **List GPUs**: `GET http://localhost:8000/api/v1/gpus`
-- **Query Telemetry**: `POST http://localhost:8000/api/v1/telemetry/query`
-
-### Example Requests
-```bash
-# Get all GPUs
-curl -X GET http://localhost:8000/api/v1/gpus \
-  -H "Content-Type: application/json"
-
-# Query telemetry for a specific GPU
-curl -X POST http://localhost:8000/api/v1/telemetry/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "gpu_id": "gpu-001",
-    "start_time": "2026-04-11T00:00:00Z",
-    "end_time": "2026-04-12T00:00:00Z"
-  }'
-
-# Health check
-curl -X GET http://localhost:8000/api/v1/health
 ```
 
 ---
@@ -1065,7 +858,9 @@ cd mq && make docker
 
 ## Kubernetes Deployment
 
-### Step-by-Step Deployment
+### Step-by-Step Deployment (Using Helm)
+
+Helm is the recommended way to deploy all services together:
 
 #### 1. Create Kind Cluster
 ```bash
@@ -1074,41 +869,50 @@ make kind-create
 
 #### 2. Build and Load Images
 ```bash
+make docker-build-all
 make docker-load-all
 ```
 
-#### 3. Deploy Services
+#### 3. Install with Helm (All Services)
 ```bash
-make deploy-all
+# Recommended: One-command deployment
+make helm-install
+
+# Or use helm directly with all default values
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace
 ```
 
 #### 4. Verify Deployment
 ```bash
-make verify
-```
+# Check all resources
+kubectl get all -n gpu-pipeline
 
-#### 5. Monitor Services
-```bash
 # Watch pods
 make watch
 
-# Check logs
+# View logs
 make logs-all
 ```
 
 ### Deployment Structure
 
-Services are deployed to the `gpu-pipeline` namespace:
+Services are deployed to the `gpu-pipeline` namespace via Helm templates:
 
 ```
-deployment/k8s/
-├── namespace.yaml          # gpu-pipeline namespace
-├── postgres.yaml           # PostgreSQL database
-├── mq.yaml                 # MQ deployment
-├── mq-service.yaml         # MQ service
-├── job-topic.yaml          # Create topic job
-├── collector.yaml          # Collector deployment
-└── streamer.yaml           # Streamer deployment
+helm/gpu-pipeline/
+├── Chart.yaml                    # Chart metadata
+├── values.yaml                   # Default configuration
+└── templates/
+    ├── namespace.yaml            # gpu-pipeline namespace
+    ├── postgres.yaml             # PostgreSQL database
+    ├── mq.yaml                   # MQ deployment
+    ├── mq-service.yaml           # MQ service
+    ├── job-topic.yaml            # Create topic job
+    ├── collector.yaml            # Collector deployment
+    ├── streamer.yaml             # Streamer deployment
+    └── api-gateway.yaml          # API Gateway deployment
 ```
 
 ### Service Endpoints
@@ -1116,59 +920,330 @@ deployment/k8s/
 From within the cluster:
 - **PostgreSQL**: `postgres:5432` (user: user, password: pass)
 - **MQ**: `mq-service:8080` (HTTP API)
-- **Collector**: Internal service
+- **Collector**: Internal service (no external endpoint)
+- **Streamer**: Internal service (no external endpoint)
+- **API Gateway**: `api-gateway:8000` (REST API for queries)
 
-### Configuration
+---
 
-Edit the YAML files in `deployment/k8s/` to customize:
-- Replicas
-- Resource limits
-- Environment variables
-- Storage configuration
+## Helm Configuration
+
+### Available Configuration Values
+
+All configurable values are in `helm/gpu-pipeline/values.yaml`. Below are all available options with explanations:
+
+#### PostgreSQL Configuration
+```bash
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set postgres.replicas=1 \
+  --set postgres.port=5432 \
+  --set postgres.user=user \
+  --set postgres.password=pass \
+  --set postgres.database=telemetry \
+  --set postgres.storage=10Gi \
+  --set postgres.resources.requests.memory=256Mi \
+  --set postgres.resources.requests.cpu=250m \
+  --set postgres.resources.limits.memory=512Mi \
+  --set postgres.resources.limits.cpu=500m
+```
+
+#### MQ Configuration
+```bash
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set mq.replicas=1 \
+  --set mq.port=8080 \
+  --set mq.config.partitions=3 \
+  --set mq.config.partition_capacity=0 \
+  --set mq.config.compaction_enabled=true \
+  --set mq.config.compaction_interval=5m \
+  --set mq.config.compaction_threshold=100000 \
+  --set mq.resources.requests.memory=128Mi \
+  --set mq.resources.requests.cpu=100m \
+  --set mq.resources.limits.memory=512Mi \
+  --set mq.resources.limits.cpu=500m
+```
+
+**MQ Config Notes:**
+- `partitions`: Number of topic partitions (higher = more parallelism)
+- `partition_capacity`: 0 = unlimited (compaction-managed), >0 = hard limit
+- `compaction_interval`: How often to run cleanup (dev: "1m", prod: "5m" or "10m")
+- `compaction_threshold`: Message count before triggering cleanup
+
+#### Collector Configuration
+```bash
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set collector.replicas=2 \
+  --set collector.port=8081 \
+  --set collector.mq_url="http://mq-service:8080" \
+  --set collector.topic=telemetry \
+  --set collector.group=collector-group \
+  --set collector.partitions=3 \
+  --set collector.batch_size=10 \
+  --set collector.poll_interval_ms=500 \
+  --set collector.resources.requests.memory=128Mi \
+  --set collector.resources.requests.cpu=100m \
+  --set collector.resources.limits.memory=256Mi \
+  --set collector.resources.limits.cpu=500m
+```
+
+**Collector Config Notes:**
+- `replicas`: Number of collector pods (scales horizontally)
+- `batch_size`: Messages to fetch per poll (higher = less latency, more memory)
+- `poll_interval_ms`: Delay between polls (lower = more responsive, higher CPU)
+
+#### Streamer Configuration
+```bash
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set streamer.replicas=2 \
+  --set streamer.mq_url="http://mq-service:8080" \
+  --set streamer.topic=telemetry \
+  --set streamer.stream_interval_ms=500 \
+  --set streamer.storage.type=embedded \
+  --set streamer.resources.requests.memory=128Mi \
+  --set streamer.resources.requests.cpu=100m \
+  --set streamer.resources.limits.memory=256Mi \
+  --set streamer.resources.limits.cpu=500m
+```
+
+**Streamer Config Notes:**
+- `replicas`: Number of streamer pods
+- `stream_interval_ms`: Delay between messages (lower = faster throughput)
+- `storage.type`: See [Storage Modes](#streamer-storage-modes) below
+
+#### API Gateway Configuration
+```bash
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set apiGateway.replicas=1 \
+  --set apiGateway.port=8000 \
+  --set apiGateway.service.type=ClusterIP \
+  --set apiGateway.resources.requests.memory=128Mi \
+  --set apiGateway.resources.requests.cpu=100m \
+  --set apiGateway.resources.limits.memory=512Mi \
+  --set apiGateway.resources.limits.cpu=500m
+```
+
+### Combined Example: Full Customization
+
+```bash
+# Production deployment with all customizations
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set postgres.storage=50Gi \
+  --set postgres.resources.limits.memory=2Gi \
+  --set mq.replicas=2 \
+  --set mq.config.partitions=6 \
+  --set mq.config.compaction_interval=10m \
+  --set collector.replicas=5 \
+  --set collector.batch_size=50 \
+  --set streamer.replicas=3 \
+  --set streamer.stream_interval_ms=100 \
+  --set apiGateway.replicas=2
+```
+
+---
+
+## Streamer Storage Modes
+
+### Storage Mode: Embedded (Default)
+```bash
+# CSV is built into Docker image
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set streamer.storage.type=embedded
+```
+
+✅ Works anywhere | ❌ Requires image rebuild to update CSV
+
+### Storage Mode: hostPath (Local KIND Testing)
+```bash
+# CSV loaded from host filesystem (single-node only)
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set streamer.storage.type=hostPath \
+  --set streamer.storage.hostPath.enabled=true \
+  --set streamer.storage.hostPath.path=/data \
+  --set streamer.storage.hostPath.nodeName=kind-control-plane
+```
+
+**Setup:**
+```bash
+# 1. Copy CSV to host
+make streamer-copy-csv
+
+# 2. Verify it exists
+make streamer-verify-csv
+
+# 3. Deploy
+helm install gpu-pipeline ./helm/gpu-pipeline ...
+```
+
+✅ Fast iteration | ❌ Single node only
+
+### Storage Mode: RWX (Multi-Node Production) ⭐
+
+For multi-node Kubernetes clusters, use RWX (ReadWriteMany) storage:
+
+```bash
+# NFS or shared storage for multi-node
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set streamer.storage.type=rwx \
+  --set streamer.storage.rwx.enabled=true \
+  --set streamer.storage.rwx.storageClassName=nfs-client \
+  --set streamer.storage.rwx.size=5Gi
+```
+
+**Why RWX for Multi-Node?**
+- All nodes have access to same CSV file
+- Streamer pods on any node can read data
+- No data duplication or synchronization issues
+- Each streamer reads same CSV sequentially (idempotent)
+
+**Setup Instructions:**
+```bash
+# 1. Install NFS provisioner (one-time, production cluster)
+helm repo add nfs-subdir-external-provisioner \
+  https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
+helm install nfs-provisioner \
+  nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
+  --set nfs.server=<NFS-SERVER-IP> \
+  --set nfs.path=/export/data
+
+# 2. Upload CSV to NFS share
+scp streamer/data/telemetry.csv <nfs-server>:/export/data/
+
+# 3. Create PVC for streamer
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: streamer-data
+  namespace: gpu-pipeline
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 5Gi
+EOF
+
+# 4. Deploy
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set streamer.storage.type=rwx
+```
+
+✅ Multi-node support | ✅ Scale to many replicas | ❌ Requires NFS setup
+
+### Storage Mode: Remote (HTTP/S3)
+```bash
+# CSV downloaded from remote URL
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set streamer.storage.type=remote \
+  --set streamer.storage.remote.enabled=true \
+  --set 'streamer.storage.remote.url=https://s3.amazonaws.com/bucket/data.csv' \
+  --set streamer.storage.remote.retries=3 \
+  --set streamer.storage.remote.retryDelay=5
+```
+
+✅ Cloud-native | ✅ No cluster storage needed | ❌ Network dependency
+
+### Multi-Node Deployment Guide
+
+For production multi-node clusters with horizontal scaling:
+
+```bash
+# 1. Create multi-node cluster (or use production EKS/GKE/AKS)
+# Example with Kind (multi-node)
+kind create cluster --config - <<EOF
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+- role: worker
+- role: worker
+EOF
+
+# 2. Set up shared storage (choose one):
+# Option A: NFS
+helm install nfs-provisioner nfs-subdir-external-provisioner/...
+
+# Option B: S3/Cloud storage
+aws s3 cp streamer/data/telemetry.csv s3://bucket/data.csv
+
+# 3. Deploy with RWX storage and scaled replicas
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace \
+  --set streamer.storage.type=rwx \
+  --set streamer.replicas=3 \
+  --set collector.replicas=3 \
+  --set mq.config.partitions=6 \
+  --set mq.replicas=2
+
+# 4. Monitor scaling
+kubectl logs -f deployment/streamer -n gpu-pipeline
+kubectl logs -f deployment/collector -n gpu-pipeline
+
+# 5. Verify load balancing
+for i in {1..100}; do
+  kubectl logs -l app=streamer -n gpu-pipeline | grep "Published" | wc -l
+done
+```
+
+**Why Multi-Node Changes Are Required:**
+| Change | Reason |
+|--------|--------|
+| `storage.type=rwx` | LocalPath only works on single node; RWX allows all nodes to access CSV |
+| `streamer.replicas=3+` | Multiple pods reading same CSV, load-balanced across nodes |
+| `collector.replicas=3+` | Multiple pods consuming from partitions (partition count ≤ replica count for fairness) |
+| `mq.config.partitions=6+` | More partitions enable better load distribution across collectors |
+| `mq.replicas=2+` | Optional: replicate MQ for HA (need persistent storage) |
 
 ---
 
 ## Helm Deployment
 
-### Using Helm Chart
+### Quick Install
+```bash
+make helm-install
+```
+
+### Full Helm Usage
 
 ```bash
-# Install
-make helm-install
+# Install with defaults
+helm install gpu-pipeline ./helm/gpu-pipeline \
+  -n gpu-pipeline \
+  --create-namespace
 
 # Verify
 kubectl get all -n gpu-pipeline
 
+# Upgrade deployment
+helm upgrade gpu-pipeline ./helm/gpu-pipeline \
+  --set streamer.replicas=5
+
 # Uninstall
-make helm-uninstall
-```
-
-### Helm Chart Structure
-
-```
-helm/gpu-pipeline/
-├── Chart.yaml             # Chart metadata
-├── values.yaml            # Default values
-├── templates/
-│   ├── namespace.yaml
-│   ├── postgres.yaml
-│   ├── mq.yaml
-│   ├── mq-service.yaml
-│   ├── job-topic.yaml
-│   ├── collector.yaml
-│   └── streamer.yaml
-```
-
-### Customize Helm Deployment
-
-```bash
-# Override values
-helm install gpu-pipeline ./helm/gpu-pipeline \
-  -n gpu-pipeline \
-  --create-namespace \
-  --set collector.replicas=3 \
-  --set streamer.replicas=2 \
-  --set postgres.storage=20Gi
+helm uninstall gpu-pipeline -n gpu-pipeline
 ```
 
 ---
